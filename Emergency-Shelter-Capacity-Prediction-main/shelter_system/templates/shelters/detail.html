@@ -1,0 +1,685 @@
+{% extends "base.html" %}
+{% block title %}{{ shelter.name }}{% endblock %}
+
+{% block content %}
+
+<!-- ── Header ───────────────────────────────────────────────────────────────── -->
+<div class="page-header mb-4">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-1 small">
+      <li class="breadcrumb-item"><a href="{{ url_for('shelters.list_shelters') }}">Shelters</a></li>
+      <li class="breadcrumb-item active">{{ shelter.name }}</li>
+    </ol>
+  </nav>
+
+  <div class="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+    <div>
+      <h1 class="page-title mb-1">{{ shelter.name }}</h1>
+      <p class="text-muted small mb-0">
+        <i class="bi bi-geo-alt me-1"></i>{{ shelter.address }}
+        <span class="ms-3" style="font-family:monospace;font-size:0.78rem;color:#aaa;">
+          {{ shelter.latitude }}, {{ shelter.longitude }}
+        </span>
+      </p>
+    </div>
+    <div class="d-flex gap-2 flex-shrink-0">
+      {% if current_user.can_manage_shelters() and (current_user.role == 'admin' or shelter.managed_by == current_user.id) %}
+      <a href="{{ url_for('shelters.edit_shelter', shelter_id=shelter.id) }}"
+         class="btn btn-outline-primary btn-sm" id="btn-edit-shelter">
+        <i class="bi bi-pencil me-1"></i>Edit Shelter
+      </a>
+      {% endif %}
+      <a href="{{ url_for('shelters.list_shelters') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>All Shelters
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ── Status strip ──────────────────────────────────────────────────────────── -->
+<div class="detail-meta-strip mb-4">
+  <div class="meta-item">
+    <span class="meta-label">Status</span>
+    <span class="op-badge op-badge-{{ shelter.status }}">{{ shelter.status_label }}</span>
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Capacity</span>
+    <span class="cap-badge cap-badge-{{ shelter.capacity_status }}">{{ shelter.capacity_status_label }}</span>
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Occupancy</span>
+    <span class="fw-semibold">{{ shelter.current_occupancy }}
+      <span class="text-muted fw-normal">/ {{ shelter.max_capacity }}</span>
+    </span>
+  </div>
+  <div class="meta-item">
+    <span class="meta-label">Available</span>
+    <span class="fw-semibold {% if shelter.available_capacity <= 0 %}text-danger{% elif shelter.available_capacity < 50 %}text-warning{% else %}text-success{% endif %}">
+      {{ shelter.available_capacity }}
+    </span>
+  </div>
+  {% if shelter.manager %}
+  <div class="meta-item">
+    <span class="meta-label">Manager</span>
+    <span class="fw-medium">{{ shelter.manager.full_name }}</span>
+  </div>
+  {% endif %}
+  <div class="meta-item">
+    <span class="meta-label">Safe Limit</span>
+    <span>{{ shelter.safe_limit }}%
+      <span class="text-muted small">({{ shelter.safe_capacity }} people)</span>
+    </span>
+  </div>
+</div>
+
+<!-- ── Row 1: Occupancy + Quick status ───────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+
+  <!-- Occupancy card -->
+  <div class="col-lg-5 col-md-6">
+    <div class="detail-card h-100">
+      <div class="detail-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-people me-1"></i>Current Occupancy</span>
+        <div class="d-flex align-items-center gap-1">
+          <span class="cap-badge cap-badge-{{ shelter.capacity_status }}">
+            {{ shelter.capacity_status_label }}
+          </span>
+          <a href="{{ url_for('shelters.shelter_occupancy', shelter_id=shelter.id) }}"
+             class="btn btn-xs btn-outline-primary ms-1" title="View dedicated occupancy log">
+            <i class="bi bi-clock-history me-1"></i>Log
+          </a>
+        </div>
+      </div>
+      <div class="detail-card-body">
+        <div class="occ-numbers mb-3">
+          <span class="occ-current">{{ shelter.current_occupancy }}</span>
+          <span class="occ-sep">/</span>
+          <span class="occ-max">{{ shelter.max_capacity }}</span>
+          <span class="occ-unit">people</span>
+        </div>
+
+        <div class="cap-bar position-relative mb-1" style="height:10px;">
+          <div class="cap-bar-fill cap-bar-{{ shelter.capacity_status }}"
+               style="width: {{ [shelter.occupancy_pct, 100]|min }}%"></div>
+          <!-- Safe limit line indicator -->
+          <div class="safe-limit-marker"
+               style="left: {{ [shelter.safe_limit, 100]|min }}%;"
+               title="Safe Planning Limit: {{ shelter.safe_limit }}% ({{ shelter.safe_capacity }} people)"></div>
+        </div>
+        <div class="d-flex justify-content-between small text-muted mb-3">
+          <span>0</span>
+          <span class="fw-semibold">{{ shelter.occupancy_pct }}% load</span>
+          <span title="Planning Capacity">Safe: {{ shelter.safe_limit }}% ({{ shelter.safe_capacity }})</span>
+          <span>Max: {{ shelter.max_capacity }}</span>
+        </div>
+
+        <!-- 4-Stat Capacity Grid -->
+        <div class="row g-2 text-center mb-3">
+          <div class="col-4">
+            <div class="p-2 rounded bg-light border">
+              <span class="d-block small text-muted">Available</span>
+              <span class="fw-bold fs-6 {% if shelter.available_capacity <= 0 %}text-danger{% elif shelter.available_capacity < 50 %}text-warning{% else %}text-success{% endif %}">
+                {{ shelter.available_capacity }}
+              </span>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="p-2 rounded bg-light border">
+              <span class="d-block small text-muted">Safe Avail</span>
+              <span class="fw-bold fs-6 {% if shelter.safe_available_capacity <= 0 %}text-danger{% elif shelter.safe_available_capacity < 50 %}text-warning{% else %}text-info{% endif %}">
+                {{ shelter.safe_available_capacity }}
+              </span>
+            </div>
+          </div>
+          <div class="col-4">
+            <div class="p-2 rounded bg-light border">
+              <span class="d-block small text-muted">Status</span>
+              <span class="fw-semibold small d-block text-truncate">
+                {{ shelter.capacity_status_label }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {% if current_user.can_manage_shelters() and (current_user.role == 'admin' or shelter.managed_by == current_user.id) %}
+        <hr class="my-3"/>
+        <form method="POST" action="{{ url_for('shelters.update_occupancy', shelter_id=shelter.id) }}" id="occ-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label fw-medium small mb-0" for="occ-input">Update occupancy count</label>
+            <span class="text-muted small">Auto-logged</span>
+          </div>
+          <div class="input-group input-group-sm mb-2">
+            <input type="number" class="form-control" id="occ-input" name="current_occupancy"
+                   min="0" value="{{ shelter.current_occupancy }}" required/>
+            <button type="submit" class="btn btn-primary" id="occ-submit">
+              <i class="bi bi-check-lg"></i> Update
+            </button>
+          </div>
+          <!-- Quick steppers -->
+          <div class="d-flex gap-1 flex-wrap mb-2">
+            <button type="button" class="btn btn-xs btn-outline-secondary quick-occ" data-diff="-25">-25</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary quick-occ" data-diff="-10">-10</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary quick-occ" data-diff="-1">-1</button>
+            <button type="button" class="btn btn-xs btn-outline-primary quick-occ" data-diff="1">+1</button>
+            <button type="button" class="btn btn-xs btn-outline-primary quick-occ" data-diff="10">+10</button>
+            <button type="button" class="btn btn-xs btn-outline-primary quick-occ" data-diff="25">+25</button>
+          </div>
+          <div class="form-text mt-1">
+            {% if shelter.current_occupancy > shelter.max_capacity %}
+              <span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Currently over capacity by {{ shelter.current_occupancy - shelter.max_capacity }} people!</span>
+            {% elif shelter.capacity_status == 'critical' %}
+              <span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Critical — very few spaces left.</span>
+            {% elif shelter.capacity_status == 'high' %}
+              <span class="text-warning"><i class="bi bi-exclamation-circle me-1"></i>High occupancy — nearing safe planning limit.</span>
+            {% elif shelter.capacity_status == 'moderate' %}
+              <span class="text-info"><i class="bi bi-info-circle me-1"></i>Moderate occupancy.</span>
+            {% else %}
+              <span class="text-success"><i class="bi bi-check-circle me-1"></i>Within safe operating capacity.</span>
+            {% endif %}
+          </div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick status + notes -->
+  <div class="col-lg-3 col-md-6">
+    {% if current_user.can_manage_shelters() and (current_user.role == 'admin' or shelter.managed_by == current_user.id) %}
+    <div class="detail-card mb-3">
+      <div class="detail-card-header"><i class="bi bi-toggle-on me-1"></i>Operational Status</div>
+      <div class="detail-card-body">
+        <form method="POST" action="{{ url_for('shelters.update_status', shelter_id=shelter.id) }}" id="status-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <select class="form-select form-select-sm mb-2" name="status" id="status-select">
+            {% for s in STATUS_CHOICES %}
+            <option value="{{ s }}" {% if shelter.status == s %}selected{% endif %}>{{ s | capitalize }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-outline-primary btn-sm w-100">
+            <i class="bi bi-check-lg me-1"></i>Apply Status
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if shelter.notes %}
+    <div class="detail-card">
+      <div class="detail-card-header"><i class="bi bi-sticky me-1"></i>Notes</div>
+      <div class="detail-card-body text-muted small" style="line-height:1.6;">{{ shelter.notes }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Occupancy history -->
+  {% if history %}
+  <div class="col-lg-4">
+    <div class="detail-card h-100">
+      <div class="detail-card-header">
+        <i class="bi bi-clock-history me-1"></i>Recent History
+        <span class="ms-1 text-muted small fw-normal">(last {{ history|length }})</span>
+      </div>
+      <div class="detail-card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr>
+            <th class="ps-3">Time</th>
+            <th class="text-end">Count</th>
+            <th class="text-end pe-3">Change</th>
+          </tr></thead>
+          <tbody>
+            {% for entry in history %}
+            {% set prev = history[loop.index] if loop.index < history|length else none %}
+            <tr>
+              <td class="ps-3 text-muted small">{{ entry.recorded_at.strftime('%d %b %H:%M') }}</td>
+              <td class="text-end fw-medium">{{ entry.occupancy }}</td>
+              <td class="text-end pe-3 small">
+                {% if prev %}
+                  {% set diff = entry.occupancy - prev.occupancy %}
+                  {% if diff > 0 %}<span class="text-danger">+{{ diff }}</span>
+                  {% elif diff < 0 %}<span class="text-success">{{ diff }}</span>
+                  {% else %}<span class="text-muted">—</span>{% endif %}
+                {% else %}<span class="text-muted">—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+</div><!-- /.row 1 -->
+
+<!-- ── Row 2: Facilities card ──────────────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+  <div class="col-lg-6">
+    <div class="detail-card">
+      <div class="detail-card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-grid-3x3-gap me-1"></i>Facilities
+          {% if shelter.facility %}
+          <span class="ms-2 text-muted fw-normal small">
+            {{ shelter.facility.count_available }}/8 available
+          </span>
+          {% endif %}
+        </span>
+        {% if current_user.can_manage_shelters() and (current_user.role == 'admin' or shelter.managed_by == current_user.id) %}
+        <button class="btn btn-xs btn-outline-secondary" type="button"
+                data-bs-toggle="collapse" data-bs-target="#facilities-edit-panel"
+                aria-expanded="false" id="edit-fac-btn">
+          <i class="bi bi-pencil me-1"></i>Edit
+        </button>
+        {% endif %}
+      </div>
+
+      <!-- Read-only view -->
+      <div class="detail-card-body p-0" id="facilities-view">
+        {% if shelter.facility %}
+          {% set fac = shelter.facility %}
+          {% set fac_items = [
+            ('has_medical_support',   'bi-heart-pulse-fill',  'text-danger',    'Medical Support',     'On-site medical team or first-aid bay',      fac.has_medical_support),
+            ('has_food',              'bi-egg-fried',         'text-warning',   'Food / Meals',        'Meal preparation or food distribution',       fac.has_food),
+            ('has_wheelchair_access', 'bi-wheelchair',        'text-primary',   'Wheelchair Access',   'Ramps, lifts, accessible sanitation',         fac.has_wheelchair_access),
+            ('has_electricity',       'bi-lightning-fill',    'text-warning',   'Electricity',         'Generator or mains power supply',             fac.has_electricity),
+            ('has_toilets',           'bi-droplet-fill',      'text-info',      'Toilets',             'Functional sanitation facilities',            fac.has_toilets),
+            ('has_running_water',     'bi-water',             'text-primary',   'Running Water',       'Drinking water tap or tanker supply',         fac.has_running_water),
+            ('has_kitchen',           'bi-cup-hot-fill',      'text-secondary', 'Kitchen',             'Full cooking and meal preparation kitchen',   fac.has_kitchen),
+            ('has_family_area',       'bi-people-fill',       'text-success',   'Family Area',         'Dedicated space for families with children',  fac.has_family_area),
+          ] %}
+          {% for field, icon, color, label, desc, value in fac_items %}
+          <div class="fac-row {% if not loop.last %}fac-row-border{% endif %}">
+            <i class="bi {{ icon }} {{ color }} me-2"></i>
+            <div class="flex-grow-1">
+              <div class="fw-medium" style="font-size:0.85rem;">{{ label }}</div>
+              <div class="text-muted" style="font-size:0.75rem;">{{ desc }}</div>
+            </div>
+            {% if value %}
+            <span class="ms-3 fac-yes"><i class="bi bi-check-circle-fill"></i> Yes</span>
+            {% else %}
+            <span class="ms-3 fac-no"><i class="bi bi-x-circle"></i> No</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+
+          {% if fac.notes %}
+          <div class="px-3 pb-3 pt-2 border-top text-muted small">
+            <i class="bi bi-chat-left-text me-1"></i>{{ fac.notes }}
+          </div>
+          {% endif %}
+
+          <div class="px-3 pb-2 text-muted" style="font-size:0.72rem;">
+            Last updated:
+            {% if fac.updater %}<strong>{{ fac.updater.full_name }}</strong>{% else %}—{% endif %}
+            at {{ fac.updated_at.strftime('%d %b %Y, %H:%M') }}
+          </div>
+        {% else %}
+          <div class="p-4 text-muted small text-center">
+            <i class="bi bi-info-circle me-1"></i>No facility data recorded yet.
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Collapsible edit form -->
+      {% if current_user.can_manage_shelters() and (current_user.role == 'admin' or shelter.managed_by == current_user.id) %}
+      <div class="collapse" id="facilities-edit-panel">
+        <div class="facility-edit-form">
+          <div class="facility-edit-title">Update Facilities</div>
+          <form method="POST" action="{{ url_for('shelters.update_facilities', shelter_id=shelter.id) }}" id="fac-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+            {% set fac = shelter.facility %}
+            {% set edit_items = [
+              ('has_medical_support',   'bi-heart-pulse-fill text-danger',    'Medical Support',     fac.has_medical_support   if fac else False),
+              ('has_food',              'bi-egg-fried text-warning',           'Food / Meals',        fac.has_food              if fac else False),
+              ('has_wheelchair_access', 'bi-wheelchair text-primary',          'Wheelchair Access',   fac.has_wheelchair_access if fac else False),
+              ('has_electricity',       'bi-lightning-fill text-warning',      'Electricity',         fac.has_electricity       if fac else False),
+              ('has_toilets',           'bi-droplet-fill text-info',           'Toilets',             fac.has_toilets           if fac else False),
+              ('has_running_water',     'bi-water text-primary',               'Running Water',       fac.has_running_water     if fac else False),
+              ('has_kitchen',           'bi-cup-hot-fill text-secondary',      'Kitchen',             fac.has_kitchen           if fac else False),
+              ('has_family_area',       'bi-people-fill text-success',         'Family Area',         fac.has_family_area       if fac else False),
+            ] %}
+
+            <div class="fac-check-grid">
+              {% for field, icon_cls, label, checked in edit_items %}
+              <div class="fac-check-item">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" role="switch"
+                         id="fac_{{ field }}" name="{{ field }}"
+                         {% if checked %}checked{% endif %}/>
+                  <label class="form-check-label" for="fac_{{ field }}">
+                    <i class="bi {{ icon_cls }} me-1"></i>{{ label }}
+                  </label>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+
+            <div class="mt-3">
+              <label class="form-label small fw-medium" for="facility_notes">
+                Notes <span class="text-muted fw-normal">(optional)</span>
+              </label>
+              <textarea class="form-control form-control-sm" id="facility_notes" name="facility_notes"
+                        rows="2" placeholder="Describe any limitations or upcoming changes…">{{ (fac.notes if fac and fac.notes else '') }}</textarea>
+            </div>
+
+            <div class="mt-3 d-flex gap-2">
+              <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-check-lg me-1"></i>Save Facilities
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-sm"
+                      data-bs-toggle="collapse" data-bs-target="#facilities-edit-panel">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+
+  <!-- ── Resources card ──────────────────────────────────────────────────────── -->
+  <div class="col-lg-6">
+    <div class="detail-card">
+      <div class="detail-card-header d-flex justify-content-between align-items-center">
+        <span>
+          <i class="bi bi-box-seam me-1"></i>Resources &amp; Supplies
+          {% if shelter.resource and shelter.resource.any_low %}
+          <span class="ms-2 badge bg-warning text-dark" style="font-size:0.68rem;">
+            <i class="bi bi-exclamation-triangle me-1"></i>Low stock
+          </span>
+          {% endif %}
+        </span>
+        {% if current_user.can_manage_shelters() and (current_user.role == 'admin' or shelter.managed_by == current_user.id) %}
+        <button class="btn btn-xs btn-outline-secondary" type="button"
+                data-bs-toggle="collapse" data-bs-target="#resources-edit-panel"
+                aria-expanded="false" id="edit-res-btn">
+          <i class="bi bi-pencil me-1"></i>Update
+        </button>
+        {% endif %}
+      </div>
+
+      <!-- Read-only resource display -->
+      <div class="detail-card-body p-0">
+        {% if shelter.resource %}
+          {% set res = shelter.resource %}
+          {% set res_items = [
+            ('beds_available', 'bi-person-workspace',   'text-primary',   'Beds Available',    'Sleeping spaces currently free',           res.beds_available,  'beds'),
+            ('food_portions',  'bi-egg-fried',          'text-warning',   'Food Portions',     'Meal portions in stock right now',         res.food_portions,   'portions'),
+            ('water_litres',   'bi-droplet-half',       'text-info',      'Drinking Water',    'Litres of safe water available',           res.water_litres,    'litres'),
+            ('medicine_kits',  'bi-heart-pulse-fill',   'text-danger',    'Medicine Kits',     'First-aid and medicine kit packs',         res.medicine_kits,   'kits'),
+            ('blankets',       'bi-layers',             'text-secondary', 'Blankets',          'Blankets or sleeping bags in stock',       res.blankets,        ''),
+          ] %}
+          {% for field, icon, color, label, desc, value, unit in res_items %}
+          <div class="resource-row {% if not loop.last %}fac-row-border{% endif %}">
+            <div class="resource-icon {{ color }}"><i class="bi {{ icon }}"></i></div>
+            <div class="resource-info">
+              <div class="resource-label">{{ label }}</div>
+              <div class="resource-desc">{{ desc }}</div>
+            </div>
+            <div class="resource-value-wrap">
+              <span class="resource-value {% if res.is_low(field) %}resource-low{% elif value > 0 %}resource-ok{% else %}resource-zero{% endif %}">
+                {{ '{:,}'.format(value) }}
+              </span>
+              {% if unit %}<span class="resource-unit">{{ unit }}</span>{% endif %}
+              {% if res.is_low(field) %}
+              <span class="resource-low-badge" title="Low stock">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+              </span>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+
+          {% if res.notes %}
+          <div class="px-3 pb-3 pt-2 border-top text-muted small">
+            <i class="bi bi-chat-left-text me-1"></i>{{ res.notes }}
+          </div>
+          {% endif %}
+
+          <div class="px-3 pb-2 text-muted" style="font-size:0.72rem;">
+            Last updated:
+            {% if res.updater %}<strong>{{ res.updater.full_name }}</strong>{% else %}—{% endif %}
+            at {{ res.updated_at.strftime('%d %b %Y, %H:%M') }}
+          </div>
+        {% else %}
+          <div class="p-4 text-muted small text-center">
+            <i class="bi bi-info-circle me-1"></i>No resource data recorded yet.
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Collapsible resource edit form -->
+      {% if current_user.can_manage_shelters() and (current_user.role == 'admin' or shelter.managed_by == current_user.id) %}
+      <div class="collapse" id="resources-edit-panel">
+        <div class="facility-edit-form">
+          <div class="facility-edit-title">Update Resource Quantities</div>
+          <p class="text-muted small mb-3">Enter the current quantities on hand. All values must be 0 or greater.</p>
+          <form method="POST" action="{{ url_for('shelters.update_resources', shelter_id=shelter.id) }}" id="res-form"
+                novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            {% set res = shelter.resource %}
+            {% set res_edit = [
+              ('beds_available', 'Beds Available',  'bi-person-workspace',  'text-primary',   'Sleeping spaces',          res.beds_available if res else 0),
+              ('food_portions',  'Food Portions',   'bi-egg-fried',         'text-warning',   'Meal portions in stock',   res.food_portions  if res else 0),
+              ('water_litres',   'Water (Litres)',  'bi-droplet-half',      'text-info',      'Safe drinking water',      res.water_litres   if res else 0),
+              ('medicine_kits',  'Medicine Kits',   'bi-heart-pulse-fill',  'text-danger',    'First-aid kit packs',      res.medicine_kits  if res else 0),
+              ('blankets',       'Blankets',        'bi-layers',            'text-secondary', 'Blankets or sleeping bags',res.blankets       if res else 0),
+            ] %}
+
+            <div class="row g-3">
+              {% for field, label, icon, color, hint, current_val in res_edit %}
+              <div class="col-sm-6">
+                <label class="form-label fw-medium small mb-1" for="res_{{ field }}">
+                  <i class="bi {{ icon }} {{ color }} me-1"></i>{{ label }}
+                </label>
+                <input
+                  type="number"
+                  class="form-control form-control-sm res-input"
+                  id="res_{{ field }}"
+                  name="{{ field }}"
+                  min="0"
+                  value="{{ current_val }}"
+                  data-field="{{ field }}"
+                  required
+                />
+                <div class="form-text">{{ hint }}</div>
+              </div>
+              {% endfor %}
+            </div>
+
+            <div class="mt-3">
+              <label class="form-label small fw-medium" for="resource_notes">
+                Supply Notes <span class="text-muted fw-normal">(optional)</span>
+              </label>
+              <textarea class="form-control form-control-sm" id="resource_notes" name="resource_notes"
+                        rows="2" placeholder="Note any pending deliveries or special conditions…">{{ (res.notes if res and res.notes else '') }}</textarea>
+            </div>
+
+            <!-- Validation summary (client-side) -->
+            <div class="alert alert-danger py-2 small mt-3 d-none" id="res-errors" role="alert"></div>
+
+            <div class="mt-3 d-flex gap-2">
+              <button type="submit" class="btn btn-primary btn-sm" id="res-submit-btn">
+                <i class="bi bi-check-lg me-1"></i>Save Resources
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-sm"
+                      data-bs-toggle="collapse" data-bs-target="#resources-edit-panel">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+    </div><!-- /.detail-card -->
+  </div><!-- /.col-lg-6 -->
+
+</div><!-- /.row 2 -->
+
+<!-- ── Row 3: Occupancy History Log ─────────────────────────────────────────── -->
+<div class="row g-4 mb-4">
+  <div class="col-12">
+    <div class="detail-card">
+      <div class="detail-card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <i class="bi bi-clock-history me-1 text-primary"></i>Recent Occupancy History
+          <span class="badge bg-light text-muted border ms-2">{{ history|length }} updates</span>
+        </div>
+        <a href="{{ url_for('shelters.shelter_occupancy', shelter_id=shelter.id) }}" class="btn btn-xs btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Full Occupancy Telemetry &amp; Log
+        </a>
+      </div>
+      <div class="detail-card-body p-0">
+        {% if history %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light text-muted small">
+              <tr>
+                <th class="ps-3">Timestamp</th>
+                <th class="text-end">Occupancy</th>
+                <th class="text-center">Load</th>
+                <th class="text-center">Delta</th>
+                <th class="text-end">Available</th>
+                <th class="text-end">Safe Available</th>
+                <th class="text-center">Status</th>
+                <th class="pe-3">Recorded By</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for h in history %}
+              <tr>
+                <td class="ps-3 text-nowrap small text-muted">
+                  {{ h.formatted_time }}
+                </td>
+                <td class="text-end fw-semibold">
+                  {{ h.occupancy }} <span class="text-muted small">/ {{ shelter.max_capacity }}</span>
+                </td>
+                <td class="text-center">
+                  <span class="badge bg-light text-dark border">{{ h.occupancy_pct }}%</span>
+                </td>
+                <td class="text-center">
+                  {% if loop.index == history|length and h.delta == 0 %}
+                    <span class="badge bg-light text-muted border">Initial</span>
+                  {% elif h.delta > 0 %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">+{{ h.delta }}</span>
+                  {% elif h.delta < 0 %}
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ h.delta }}</span>
+                  {% else %}
+                    <span class="badge bg-light text-muted border">&plusmn;0</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  <span class="{% if h.available_capacity <= 0 %}text-danger fw-bold{% elif h.available_capacity < 50 %}text-warning{% else %}text-success{% endif %}">
+                    {{ h.available_capacity }}
+                  </span>
+                </td>
+                <td class="text-end">
+                  <span class="{% if h.safe_available_capacity <= 0 %}text-danger fw-bold{% elif h.safe_available_capacity < 50 %}text-warning{% else %}text-info{% endif %}">
+                    {{ h.safe_available_capacity }}
+                  </span>
+                </td>
+                <td class="text-center">
+                  <span class="cap-badge cap-badge-{{ h.capacity_status }}">
+                    {{ h.capacity_status | capitalize }}
+                  </span>
+                </td>
+                <td class="pe-3 small text-nowrap">
+                  {% if h.recorder %}
+                    <i class="bi bi-person me-1 text-muted"></i>{{ h.recorder.full_name }}
+                  {% else %}
+                    <span class="text-muted fst-italic">System</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="p-4 text-center text-muted small">
+          <i class="bi bi-clock-history fs-3 d-block mb-1 text-muted"></i>
+          No occupancy updates recorded yet.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // ── Resource form: client-side non-negative validation ────────────────────
+  const resForm = document.getElementById('res-form');
+  if (resForm) {
+    resForm.addEventListener('submit', function (e) {
+      const errorBox = document.getElementById('res-errors');
+      const errors   = [];
+
+      document.querySelectorAll('.res-input').forEach(function (input) {
+        const val  = input.value.trim();
+        const num  = parseInt(val, 10);
+        const name = input.previousElementSibling
+                   ? input.previousElementSibling.textContent.trim()
+                   : input.name;
+
+        if (val === '' || isNaN(num)) {
+          errors.push(name + ': enter a whole number (e.g. 0, 100, 500).');
+          input.classList.add('is-invalid');
+        } else if (num < 0) {
+          errors.push(name + ': quantity cannot be negative.');
+          input.classList.add('is-invalid');
+        } else {
+          input.classList.remove('is-invalid');
+        }
+      });
+
+      if (errors.length > 0) {
+        e.preventDefault();
+        errorBox.innerHTML = errors.map(function(m){ return '<div>' + m + '</div>'; }).join('');
+        errorBox.classList.remove('d-none');
+        errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+
+    // Clear error state on input
+    document.querySelectorAll('.res-input').forEach(function (input) {
+      input.addEventListener('input', function () {
+        this.classList.remove('is-invalid');
+      });
+    });
+  }
+
+  // ── Occupancy: confirm large reductions & quick steppers ─────────────────
+  const occForm = document.getElementById('occ-form');
+  const occInput = document.getElementById('occ-input');
+  if (occForm && occInput) {
+    document.querySelectorAll('.quick-occ').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const diff = parseInt(this.getAttribute('data-diff'), 10);
+        let currentVal = parseInt(occInput.value, 10);
+        if (isNaN(currentVal)) currentVal = 0;
+        let nextVal = currentVal + diff;
+        if (nextVal < 0) nextVal = 0;
+        occInput.value = nextVal;
+      });
+    });
+
+    occForm.addEventListener('submit', function (e) {
+      const current = {{ shelter.current_occupancy }};
+      const newVal  = parseInt(occInput.value, 10);
+      if (!isNaN(newVal) && (current - newVal) > 50) {
+        if (!confirm('Reduce occupancy by ' + (current - newVal) + ' people. Is this correct?')) {
+          e.preventDefault();
+        }
+      }
+    });
+  }
+</script>
+{% endblock %}

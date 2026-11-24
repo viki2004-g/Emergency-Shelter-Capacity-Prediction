@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+{% block title %}{{ shelter.name if shelter else 'New Shelter' }}{% endblock %}
+
+{% block content %}
+
+<!-- ── Page header ──────────────────────────────────────────────────────────── -->
+<div class="page-header d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb mb-1 small">
+        <li class="breadcrumb-item"><a href="{{ url_for('shelters.list_shelters') }}">Shelters</a></li>
+        <li class="breadcrumb-item active">{{ title }}</li>
+      </ol>
+    </nav>
+    <h1 class="page-title">{{ title }}</h1>
+  </div>
+  {% if shelter %}
+  <a href="{{ url_for('shelters.shelter_detail', shelter_id=shelter.id) }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Cancel
+  </a>
+  {% else %}
+  <a href="{{ url_for('shelters.list_shelters') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Cancel
+  </a>
+  {% endif %}
+</div>
+
+<form method="POST" novalidate id="shelter-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+  <div class="row g-4">
+
+    <!-- ── LEFT COLUMN: Basic Info ─────────────────────────────────────────── -->
+    <div class="col-lg-8">
+
+      <!-- Basic Information -->
+      <div class="form-section mb-4">
+        <h2 class="form-section-title">Basic Information</h2>
+
+        <!-- Name -->
+        <div class="mb-3">
+          <label for="name" class="form-label fw-medium">
+            Shelter Name <span class="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            class="form-control form-control-sm {% if errors.name %}is-invalid{% endif %}"
+            id="name" name="name"
+            value="{{ (form_data.get('name') or (shelter.name if shelter else '')) }}"
+            maxlength="150"
+            placeholder="e.g. Deccan Gymkhana Relief Centre"
+            required
+          />
+          {% if errors.name %}
+          <div class="invalid-feedback">{{ errors.name }}</div>
+          {% endif %}
+        </div>
+
+        <!-- Address -->
+        <div class="mb-3">
+          <label for="address" class="form-label fw-medium">
+            Address <span class="text-danger">*</span>
+          </label>
+          <input
+            type="text"
+            class="form-control form-control-sm {% if errors.address %}is-invalid{% endif %}"
+            id="address" name="address"
+            value="{{ (form_data.get('address') or (shelter.address if shelter else '')) }}"
+            maxlength="300"
+            placeholder="Full street address"
+            required
+          />
+          {% if errors.address %}
+          <div class="invalid-feedback">{{ errors.address }}</div>
+          {% endif %}
+        </div>
+
+        <!-- Latitude / Longitude -->
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label for="latitude" class="form-label fw-medium">
+              Latitude <span class="text-danger">*</span>
+            </label>
+            <input
+              type="number"
+              class="form-control form-control-sm {% if errors.latitude %}is-invalid{% endif %}"
+              id="latitude" name="latitude" step="0.000001" min="-90" max="90"
+              value="{{ (form_data.get('latitude') or (shelter.latitude | float if shelter else '')) }}"
+              placeholder="e.g. 18.516700"
+              required
+            />
+            {% if errors.latitude %}
+            <div class="invalid-feedback">{{ errors.latitude }}</div>
+            {% endif %}
+            <div class="form-text">Between -90 and 90</div>
+          </div>
+          <div class="col-sm-6">
+            <label for="longitude" class="form-label fw-medium">
+              Longitude <span class="text-danger">*</span>
+            </label>
+            <input
+              type="number"
+              class="form-control form-control-sm {% if errors.longitude %}is-invalid{% endif %}"
+              id="longitude" name="longitude" step="0.000001" min="-180" max="180"
+              value="{{ (form_data.get('longitude') or (shelter.longitude | float if shelter else '')) }}"
+              placeholder="e.g. 73.838900"
+              required
+            />
+            {% if errors.longitude %}
+            <div class="invalid-feedback">{{ errors.longitude }}</div>
+            {% endif %}
+            <div class="form-text">Between -180 and 180</div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="mt-3">
+          <label for="notes" class="form-label fw-medium">Notes</label>
+          <textarea
+            class="form-control form-control-sm"
+            id="notes" name="notes" rows="2"
+            placeholder="Special instructions, access notes, contact info…"
+          >{{ (form_data.get('notes') or (shelter.notes if shelter and shelter.notes else '')) }}</textarea>
+        </div>
+      </div>
+
+      <!-- Capacity & Status -->
+      <div class="form-section mb-4">
+        <h2 class="form-section-title">Capacity &amp; Status</h2>
+
+        <div class="row g-3 mb-3">
+          <div class="col-sm-4">
+            <label for="max_capacity" class="form-label fw-medium">
+              Max Capacity <span class="text-danger">*</span>
+            </label>
+            <input
+              type="number"
+              class="form-control form-control-sm {% if errors.max_capacity %}is-invalid{% endif %}"
+              id="max_capacity" name="max_capacity" min="1"
+              value="{{ (form_data.get('max_capacity') or (shelter.max_capacity if shelter else '')) }}"
+              placeholder="e.g. 500"
+              required
+            />
+            {% if errors.max_capacity %}
+            <div class="invalid-feedback">{{ errors.max_capacity }}</div>
+            {% endif %}
+          </div>
+          <div class="col-sm-4">
+            <label for="current_occupancy" class="form-label fw-medium">
+              Current Occupancy <span class="text-danger">*</span>
+            </label>
+            <input
+              type="number"
+              class="form-control form-control-sm {% if errors.current_occupancy %}is-invalid{% endif %}"
+              id="current_occupancy" name="current_occupancy" min="0" value="0"
+              value="{{ (form_data.get('current_occupancy') or (shelter.current_occupancy if shelter else 0)) }}"
+            />
+            {% if errors.current_occupancy %}
+            <div class="invalid-feedback">{{ errors.current_occupancy }}</div>
+            {% endif %}
+          </div>
+          <div class="col-sm-4">
+            <label for="safe_limit_pct" class="form-label fw-medium">
+              Safe Limit %
+              <i class="bi bi-question-circle text-muted small ms-1"
+                 title="Percentage of max capacity considered safe. Leave blank to use the system default (85%)."></i>
+            </label>
+            <div class="input-group input-group-sm">
+              <input
+                type="number"
+                class="form-control {% if errors.safe_limit_pct %}is-invalid{% endif %}"
+                id="safe_limit_pct" name="safe_limit_pct" min="50" max="100"
+                value="{{ (form_data.get('safe_limit_pct') or (shelter.safe_limit_pct if shelter and shelter.safe_limit_pct else '')) }}"
+                placeholder="85"
+              />
+              <span class="input-group-text">%</span>
+              {% if errors.safe_limit_pct %}
+              <div class="invalid-feedback">{{ errors.safe_limit_pct }}</div>
+              {% endif %}
+            </div>
+            <div class="form-text">Leave blank to use default (85%)</div>
+          </div>
+        </div>
+
+        <!-- Live occupancy preview -->
+        <div class="cap-preview mb-3" id="cap-preview" style="display:none;">
+          <div class="cap-preview-label">
+            <span id="preview-pct">0%</span>
+            <span id="preview-available" class="text-muted small"></span>
+          </div>
+          <div class="cap-bar mt-1">
+            <div class="cap-bar-fill cap-bar-safe" id="preview-bar" style="width:0%"></div>
+          </div>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-sm-6">
+            <label for="status" class="form-label fw-medium">Operational Status</label>
+            <select class="form-select form-select-sm {% if errors.status %}is-invalid{% endif %}"
+                    id="status" name="status">
+              {% for s in STATUS_CHOICES %}
+              <option value="{{ s }}"
+                {% if (form_data.get('status') or (shelter.status if shelter else 'active')) == s %}
+                selected
+                {% endif %}>
+                {{ s | capitalize }}
+              </option>
+              {% endfor %}
+            </select>
+            {% if errors.status %}
+            <div class="invalid-feedback">{{ errors.status }}</div>
+            {% endif %}
+          </div>
+          <div class="col-sm-6">
+            <label for="managed_by" class="form-label fw-medium">Shelter Manager</label>
+            <select class="form-select form-select-sm" id="managed_by" name="managed_by">
+              <option value="">— Unassigned —</option>
+              {% for mgr in managers %}
+              <option value="{{ mgr.id }}"
+                {% if (form_data.get('managed_by') | string == mgr.id | string) or
+                      (shelter and shelter.managed_by == mgr.id) %}
+                selected
+                {% endif %}>
+                {{ mgr.full_name }} ({{ mgr.role_label }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.col-lg-8 -->
+
+    <!-- ── RIGHT COLUMN: Facilities ───────────────────────────────────────── -->
+    <div class="col-lg-4">
+      <div class="form-section h-auto">
+        <h2 class="form-section-title">Facilities Available</h2>
+        <p class="text-muted small mb-3">
+          These flags control which groups can be directed here.
+        </p>
+
+        {% set fac_items = [
+          ('has_medical_support',   'bi-heart-pulse-fill text-danger',  'Medical Support',   'On-site medical team or first-aid bay'),
+          ('has_food',              'bi-egg-fried text-warning',         'Food / Meals',      'Meal preparation or food distribution'),
+          ('has_wheelchair_access', 'bi-wheelchair text-primary',        'Wheelchair Access', 'Ramps and accessible toilets'),
+          ('has_electricity',       'bi-lightning-fill text-warning',    'Electricity',       'Generator or mains power'),
+          ('has_toilets',           'bi-droplet-fill text-info',         'Toilets',           'Sanitation facilities'),
+          ('has_running_water',     'bi-water text-primary',             'Running Water',     'Drinking water supply'),
+          ('has_kitchen',           'bi-cup-hot-fill text-secondary',    'Kitchen',           'Cooking or meal preparation'),
+          ('has_family_area',       'bi-people-fill text-success',       'Family Area',       'Dedicated space for families with children'),
+        ] %}
+
+        {% for field, icon_cls, label, tip in fac_items %}
+        <div class="facility-check">
+          <div class="form-check form-switch">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              role="switch"
+              id="{{ field }}"
+              name="{{ field }}"
+              {% if (form_data.get(field) == 'on') or (facilities.get(field) == True) %}
+              checked
+              {% endif %}
+            />
+            <label class="form-check-label" for="{{ field }}">
+              <i class="bi {{ icon_cls }} me-1"></i>
+              <strong>{{ label }}</strong>
+            </label>
+          </div>
+          <div class="form-text ms-4 ps-2">{{ tip }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div><!-- /.row -->
+
+  <!-- ── Submit bar ───────────────────────────────────────────────────────── -->
+  <div class="form-submit-bar mt-4">
+    <button type="submit" class="btn btn-primary btn-sm" id="submit-btn">
+      <i class="bi bi-check-lg me-1"></i>
+      {{ 'Update Shelter' if shelter else 'Create Shelter' }}
+    </button>
+    {% if shelter %}
+    <a href="{{ url_for('shelters.shelter_detail', shelter_id=shelter.id) }}"
+       class="btn btn-outline-secondary btn-sm ms-2">Cancel</a>
+    {% else %}
+    <a href="{{ url_for('shelters.list_shelters') }}"
+       class="btn btn-outline-secondary btn-sm ms-2">Cancel</a>
+    {% endif %}
+  </div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Live occupancy percentage preview
+  const maxInput = document.getElementById('max_capacity');
+  const occInput = document.getElementById('current_occupancy');
+  const preview  = document.getElementById('cap-preview');
+  const bar      = document.getElementById('preview-bar');
+  const pctLabel = document.getElementById('preview-pct');
+  const availLbl = document.getElementById('preview-available');
+
+  function updatePreview() {
+    const max = parseInt(maxInput.value) || 0;
+    const occ = parseInt(occInput.value) || 0;
+    if (max <= 0) { preview.style.display = 'none'; return; }
+
+    const pct   = Math.round((occ / max) * 100 * 10) / 10;
+    const avail = max - occ;
+    const width = Math.min(pct, 100);
+
+    // Colour thresholds
+    let cls = 'cap-bar-safe';
+    if (pct >= 100) cls = 'cap-bar-overcrowded';
+    else if (pct >= 95) cls = 'cap-bar-critical';
+    else if (pct >= 85) cls = 'cap-bar-high';
+    else if (pct >= 70) cls = 'cap-bar-moderate';
+
+    bar.className = 'cap-bar-fill ' + cls;
+    bar.style.width = width + '%';
+    pctLabel.textContent = pct + '%';
+    availLbl.textContent = avail >= 0
+      ? avail + ' spaces available'
+      : Math.abs(avail) + ' over capacity';
+    preview.style.display = 'block';
+  }
+
+  maxInput.addEventListener('input', updatePreview);
+  occInput.addEventListener('input', updatePreview);
+  // Run once on load for edit forms
+  updatePreview();
+
+  // Prevent double-submit
+  document.getElementById('shelter-form').addEventListener('submit', function() {
+    document.getElementById('submit-btn').disabled = true;
+    document.getElementById('submit-btn').innerHTML =
+      '<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
+  });
+</script>
+{% endblock %}

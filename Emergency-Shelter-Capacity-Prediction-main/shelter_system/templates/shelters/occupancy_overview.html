@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Occupancy Tracking — Shelter Network{% endblock %}
+
+{% block content %}
+
+<!-- ── Page Header ──────────────────────────────────────────────────────────── -->
+<div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+        <i class="bi bi-speedometer me-1"></i>Capacity Telemetry
+      </span>
+      <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">
+        Safe Limit: {{ global_safe_limit }}% Global Default
+      </span>
+    </div>
+    <h1 class="page-title mb-1">Network Occupancy Tracking</h1>
+    <p class="page-subtitle text-muted mb-0">
+      Real-time monitoring of shelter loads, available space, and safe planning capacities across all shelters.
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('shelters.list_shelters') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-building me-1"></i>All Shelters
+    </a>
+    {% if current_user.can_manage_shelters() %}
+    <a href="{{ url_for('shelters.new_shelter') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>New Shelter
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Network Metrics Strip ────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-building me-1 text-muted"></i>Total Shelters</span>
+      <div class="stat-card-val text-dark">{{ stats.total_shelters }}</div>
+      <div class="stat-card-hint text-muted">Registered in district</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-shield-check me-1 text-muted"></i>Max Capacity</span>
+      <div class="stat-card-val text-dark">{{ '{:,}'.format(stats.total_capacity) }}</div>
+      <div class="stat-card-hint text-muted">Total physical beds</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-people me-1 text-primary"></i>Current Occupancy</span>
+      <div class="stat-card-val text-primary">{{ '{:,}'.format(stats.total_occupancy) }}</div>
+      <div class="stat-card-hint fw-semibold {% if stats.overall_pct > 95 %}text-danger{% elif stats.overall_pct > 80 %}text-warning{% else %}text-success{% endif %}">
+        {{ stats.overall_pct }}% of capacity
+      </div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-door-open me-1 text-success"></i>Available Capacity</span>
+      <div class="stat-card-val {% if stats.total_available <= 0 %}text-danger{% elif stats.total_available < 100 %}text-warning{% else %}text-success{% endif %}">
+        {{ '{:,}'.format(stats.total_available) }}
+      </div>
+      <div class="stat-card-hint text-muted">Max - Occupancy</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-shield-shaded me-1 text-info"></i>Safe Available</span>
+      <div class="stat-card-val {% if stats.total_safe_available <= 0 %}text-danger{% elif stats.total_safe_available < 100 %}text-warning{% else %}text-info{% endif %}">
+        {{ '{:,}'.format(stats.total_safe_available) }}
+      </div>
+      <div class="stat-card-hint text-muted">Planning limit surplus</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-exclamation-triangle me-1 text-danger"></i>High / Critical</span>
+      <div class="stat-card-val {% if (stats.status_counts.critical + stats.status_counts.overcrowded) > 0 %}text-danger{% elif stats.status_counts.high > 0 %}text-warning{% else %}text-muted{% endif %}">
+        {{ stats.status_counts.high + stats.status_counts.critical + stats.status_counts.overcrowded }}
+      </div>
+      <div class="stat-card-hint text-muted">Shelters near limit</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Configurable Status Thresholds & Live Breakdown Banner ───────────────── -->
+<div class="card mb-4">
+  <div class="card-body p-3">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <div>
+        <span class="fw-semibold text-dark small me-2"><i class="bi bi-sliders me-1 text-primary"></i>Configurable Status Engine:</span>
+        <span class="text-muted small">Automatic classification based on real-time occupancy percentage</span>
+      </div>
+      <div class="d-flex flex-wrap gap-2 align-items-center">
+        <span class="cap-badge cap-badge-safe" title="Up to {{ thresholds.safe }}%">
+          <i class="bi bi-check-circle me-1"></i>Safe (0–{{ thresholds.safe|int }}%): <strong>{{ stats.status_counts.safe }}</strong>
+        </span>
+        <span class="cap-badge cap-badge-moderate" title="{{ thresholds.safe|int + 1 }}% to {{ thresholds.moderate|int }}%">
+          <i class="bi bi-info-circle me-1"></i>Moderate ({{ thresholds.safe|int + 1 }}–{{ thresholds.moderate|int }}%): <strong>{{ stats.status_counts.moderate }}</strong>
+        </span>
+        <span class="cap-badge cap-badge-high" title="{{ thresholds.moderate|int + 1 }}% to {{ thresholds.high|int }}%">
+          <i class="bi bi-exclamation-circle me-1"></i>High ({{ thresholds.moderate|int + 1 }}–{{ thresholds.high|int }}%): <strong>{{ stats.status_counts.high }}</strong>
+        </span>
+        <span class="cap-badge cap-badge-critical" title="{{ thresholds.high|int + 1 }}% to {{ thresholds.critical|int }}%">
+          <i class="bi bi-exclamation-triangle me-1"></i>Critical ({{ thresholds.high|int + 1 }}–{{ thresholds.critical|int }}%): <strong>{{ stats.status_counts.critical }}</strong>
+        </span>
+        <span class="cap-badge cap-badge-overcrowded" title="Above {{ thresholds.critical|int }}%">
+          <i class="bi bi-slash-circle me-1"></i>Overcrowded (>{{ thresholds.critical|int }}%): <strong>{{ stats.status_counts.overcrowded }}</strong>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Shelters Occupancy Telemetry Table ────────────────────────────────────── -->
+<div class="card">
+  <div class="card-header bg-transparent py-3 d-flex flex-wrap align-items-center justify-content-between gap-2 border-bottom">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-bar-chart-steps text-primary"></i>
+      <h5 class="mb-0 fw-semibold">Shelter Occupancy Telemetry</h5>
+    </div>
+    <div class="small text-muted">
+      Formulas: <code>Available = Max - Occupancy</code> &bull; <code>Safe Available = Planning Capacity - Occupancy</code>
+    </div>
+  </div>
+
+  <div class="card-body p-0">
+    {% if shelters %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="occupancy-network-table">
+        <thead class="table-light text-muted small text-uppercase">
+          <tr>
+            <th style="min-width: 220px;" class="ps-4">Shelter</th>
+            <th>Operational</th>
+            <th class="text-center" style="min-width: 170px;">Occupancy Load</th>
+            <th class="text-end">Current</th>
+            <th class="text-end">Max</th>
+            <th class="text-end">Available</th>
+            <th class="text-end">Safe Limit</th>
+            <th class="text-end">Safe Available</th>
+            <th class="text-center">Status</th>
+            <th class="text-end pe-4">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in shelters %}
+          <tr>
+            <td class="ps-4">
+              <div class="fw-semibold">
+                <a href="{{ url_for('shelters.shelter_detail', shelter_id=s.id) }}" class="text-dark text-decoration-none hover-primary">
+                  {{ s.name }}
+                </a>
+              </div>
+              <div class="text-muted small text-truncate" style="max-width: 260px;">
+                <i class="bi bi-geo-alt me-1"></i>{{ s.address }}
+              </div>
+            </td>
+
+            <td>
+              <span class="op-badge op-badge-{{ s.status }}">{{ s.status_label }}</span>
+            </td>
+
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <div class="flex-grow-1" style="min-width: 90px;">
+                  <div class="cap-bar position-relative" style="height: 8px;">
+                    <div class="cap-bar-fill cap-bar-{{ s.capacity_status }}"
+                         style="width: {{ [s.occupancy_pct, 100]|min }}%"></div>
+                    <!-- Safe limit visual marker -->
+                    <div class="safe-limit-marker"
+                         style="left: {{ [s.safe_limit, 100]|min }}%;"
+                         title="Safe Limit: {{ s.safe_limit }}% ({{ s.safe_capacity }} people)"></div>
+                  </div>
+                </div>
+                <span class="small fw-semibold text-nowrap" style="min-width: 44px; text-align: right;">
+                  {{ s.occupancy_pct }}%
+                </span>
+              </div>
+            </td>
+
+            <td class="text-end fw-semibold text-nowrap">
+              {{ s.current_occupancy }}
+            </td>
+
+            <td class="text-end text-muted text-nowrap">
+              {{ s.max_capacity }}
+            </td>
+
+            <td class="text-end text-nowrap">
+              <span class="fw-semibold {% if s.available_capacity <= 0 %}text-danger{% elif s.available_capacity < 50 %}text-warning{% else %}text-success{% endif %}">
+                {{ s.available_capacity }}
+              </span>
+            </td>
+
+            <td class="text-end text-nowrap">
+              <span class="badge bg-light text-secondary border">
+                {{ s.safe_limit }}% <span class="text-muted">({{ s.safe_capacity }})</span>
+              </span>
+            </td>
+
+            <td class="text-end text-nowrap">
+              <span class="fw-semibold {% if s.safe_available_capacity <= 0 %}text-danger{% elif s.safe_available_capacity < 50 %}text-warning{% else %}text-info{% endif %}">
+                {{ s.safe_available_capacity }}
+              </span>
+            </td>
+
+            <td class="text-center">
+              <span class="cap-badge cap-badge-{{ s.capacity_status }}">
+                {{ s.capacity_status_label }}
+              </span>
+            </td>
+
+            <td class="text-end pe-4 text-nowrap">
+              <div class="d-flex justify-content-end gap-1">
+                <a href="{{ url_for('shelters.shelter_occupancy', shelter_id=s.id) }}"
+                   class="btn btn-sm btn-outline-primary py-1 px-2"
+                   title="View complete occupancy history and change log">
+                  <i class="bi bi-clock-history me-1"></i>History
+                </a>
+                <a href="{{ url_for('shelters.shelter_detail', shelter_id=s.id) }}"
+                   class="btn btn-sm btn-light border py-1 px-2"
+                   title="Shelter Details">
+                  <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-5 text-center text-muted">
+      <i class="bi bi-building-x fs-1 mb-2 d-block"></i>
+      <p class="mb-0">No shelters registered yet.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

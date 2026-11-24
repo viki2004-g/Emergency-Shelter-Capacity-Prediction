@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}Shelters{% endblock %}
+
+{% block content %}
+
+<!-- ── Page header ──────────────────────────────────────────────────────────── -->
+<div class="page-header d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title">Shelter Network</h1>
+    <p class="page-subtitle text-muted">
+      Monitor capacity and manage all emergency shelters.
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if current_user.role in ('authority', 'admin', 'shelter_manager') %}
+    <a href="{{ url_for('shelters.occupancy_overview') }}" class="btn btn-outline-primary btn-sm" id="btn-occupancy-track">
+      <i class="bi bi-speedometer me-1"></i>Occupancy Tracking
+    </a>
+    {% endif %}
+    {% if current_user.can_manage_shelters() %}
+    <a href="{{ url_for('shelters.new_shelter') }}" class="btn btn-primary btn-sm" id="btn-new-shelter">
+      <i class="bi bi-plus-lg me-1"></i>New Shelter
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Summary stats strip ──────────────────────────────────────────────────── -->
+<div class="shelter-stats-strip mb-4">
+  <div class="stat-chip">
+    <span class="stat-value">{{ stats.total }}</span>
+    <span class="stat-label">Shelters</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-value">{{ stats.active_count }}</span>
+    <span class="stat-label">Active</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-value">{{ '{:,}'.format(stats.total_capacity) }}</span>
+    <span class="stat-label">Total Capacity</span>
+  </div>
+  <div class="stat-chip">
+    <span class="stat-value">{{ '{:,}'.format(stats.total_occupied) }}</span>
+    <span class="stat-label">Occupied</span>
+  </div>
+  <div class="stat-chip {% if stats.total_available < 0 %}stat-chip-danger{% elif stats.total_available < 200 %}stat-chip-warn{% else %}stat-chip-ok{% endif %}">
+    <span class="stat-value">{{ '{:,}'.format(stats.total_available) }}</span>
+    <span class="stat-label">Available</span>
+  </div>
+  <div class="stat-chip {% if stats.total_safe_available < 0 %}stat-chip-danger{% elif stats.total_safe_available < 200 %}stat-chip-warn{% else %}stat-chip-ok{% endif %}">
+    <span class="stat-value">{{ '{:,}'.format(stats.total_safe_available) }}</span>
+    <span class="stat-label">Safe Avail</span>
+  </div>
+  {% if stats.critical_count > 0 %}
+  <div class="stat-chip stat-chip-danger">
+    <span class="stat-value">{{ stats.critical_count }}</span>
+    <span class="stat-label">Critical / Overcrowded</span>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Search & filter bar ──────────────────────────────────────────────────── -->
+<form method="GET" action="{{ url_for('shelters.list_shelters') }}" class="shelter-filter-bar mb-3" id="filter-form">
+  <div class="input-group input-group-sm" style="max-width: 340px;">
+    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+    <input
+      type="search"
+      class="form-control"
+      name="q"
+      id="shelter-search"
+      placeholder="Search by name or address…"
+      value="{{ search }}"
+      autocomplete="off"
+    />
+  </div>
+
+  <select name="status" class="form-select form-select-sm" style="width:auto;" id="status-select" onchange="this.form.submit()">
+    <option value="">All statuses</option>
+    {% for s in STATUS_CHOICES %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>
+      {{ s | capitalize }}
+    </option>
+    {% endfor %}
+  </select>
+
+  <button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button>
+  {% if search or status_filter %}
+  <a href="{{ url_for('shelters.list_shelters') }}" class="btn btn-sm btn-link text-muted">
+    <i class="bi bi-x-circle me-1"></i>Clear
+  </a>
+  {% endif %}
+</form>
+
+<!-- ── Shelter table ─────────────────────────────────────────────────────────── -->
+{% if shelters %}
+<div class="table-responsive">
+  <table class="shelter-table table table-sm align-middle" id="shelters-table">
+    <thead>
+      <tr>
+        <th style="min-width:200px">Shelter</th>
+        <th>Status</th>
+        <th style="min-width:180px">Occupancy</th>
+        <th class="text-end">Capacity</th>
+        <th class="text-end">Available</th>
+        <th class="text-end" title="Planning capacity minus current occupancy">Safe Avail</th>
+        <th class="text-center">Facilities</th>
+        <th class="text-end">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in shelters %}
+      <tr class="shelter-row" data-name="{{ s.name | lower }}" data-address="{{ s.address | lower }}">
+        <td>
+          <div class="shelter-name">
+            <a href="{{ url_for('shelters.shelter_detail', shelter_id=s.id) }}" class="fw-medium text-decoration-none">
+              {{ s.name }}
+            </a>
+          </div>
+          <div class="shelter-address text-muted small">
+            <i class="bi bi-geo-alt me-1"></i>{{ s.address }}
+          </div>
+        </td>
+
+        <td>
+          <!-- Operational status -->
+          <span class="op-badge op-badge-{{ s.status }}">{{ s.status_label }}</span>
+        </td>
+
+        <td>
+          <!-- Capacity bar + percentage -->
+          <div class="cap-bar-wrap">
+            <div class="cap-bar">
+              <div class="cap-bar-fill cap-bar-{{ s.capacity_status }}"
+                   style="width: {{ [s.occupancy_pct, 100]|min }}%"></div>
+            </div>
+            <div class="cap-bar-labels">
+              <span class="cap-badge cap-badge-{{ s.capacity_status }}">
+                {{ s.capacity_status_label }}
+              </span>
+              <span class="text-muted small">{{ s.occupancy_pct }}%</span>
+            </div>
+          </div>
+        </td>
+
+        <td class="text-end text-nowrap">
+          <span class="fw-medium">{{ s.current_occupancy }}</span>
+          <span class="text-muted">/{{ s.max_capacity }}</span>
+        </td>
+
+        <td class="text-end">
+          <span class="{% if s.available_capacity <= 0 %}text-danger fw-bold{% elif s.available_capacity < 50 %}text-warning fw-medium{% else %}text-success{% endif %}">
+            {{ s.available_capacity }}
+          </span>
+        </td>
+
+        <td class="text-end">
+          <span class="{% if s.safe_available_capacity <= 0 %}text-danger fw-bold{% elif s.safe_available_capacity < 50 %}text-warning fw-medium{% else %}text-info{% endif %}">
+            {{ s.safe_available_capacity }}
+          </span>
+        </td>
+
+        <td class="text-center">
+          <div class="fac-icons">
+            {% if s.facility %}
+              {% if s.facility.has_medical_support   %}<i class="bi bi-heart-pulse-fill text-danger" title="Medical support"></i>{% endif %}
+              {% if s.facility.has_wheelchair_access %}<i class="bi bi-wheelchair text-primary" title="Wheelchair access"></i>{% endif %}
+              {% if s.facility.has_electricity       %}<i class="bi bi-lightning-fill text-warning" title="Electricity"></i>{% endif %}
+              {% if s.facility.has_kitchen           %}<i class="bi bi-cup-hot-fill text-secondary" title="Kitchen"></i>{% endif %}
+              {% if s.facility.has_family_area       %}<i class="bi bi-people-fill text-info" title="Family area"></i>{% endif %}
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </div>
+        </td>
+
+        <td class="text-end text-nowrap">
+          <a href="{{ url_for('shelters.shelter_detail', shelter_id=s.id) }}"
+             class="btn btn-xs btn-outline-secondary" title="View details">
+            <i class="bi bi-eye"></i>
+          </a>
+          {% if current_user.can_manage_shelters() %}
+          {% if current_user.role == 'admin' or s.managed_by == current_user.id %}
+          <a href="{{ url_for('shelters.edit_shelter', shelter_id=s.id) }}"
+             class="btn btn-xs btn-outline-primary" title="Edit">
+            <i class="bi bi-pencil"></i>
+          </a>
+          {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Results count -->
+<p class="text-muted small mt-2">
+  Showing {{ shelters | length }} of {{ stats.total }} shelter(s).
+  {% if search or status_filter %}
+  <a href="{{ url_for('shelters.list_shelters') }}" class="ms-1">Show all</a>
+  {% endif %}
+</p>
+
+{% else %}
+<!-- ── Empty state ──────────────────────────────────────────────────────────── -->
+<div class="empty-state">
+  <i class="bi bi-building-x empty-state-icon"></i>
+  {% if search or status_filter %}
+    <div class="empty-state-title">No shelters match your search</div>
+    <p class="empty-state-desc">
+      Try a different name, address or status filter.
+      <br>
+      <a href="{{ url_for('shelters.list_shelters') }}">Clear all filters</a>
+    </p>
+  {% else %}
+    <div class="empty-state-title">No shelters registered yet</div>
+    <p class="empty-state-desc">
+      {% if current_user.can_manage_shelters() %}
+        Add the first shelter to get started.
+      {% else %}
+        Contact an administrator to register shelters.
+      {% endif %}
+    </p>
+    {% if current_user.can_manage_shelters() %}
+    <a href="{{ url_for('shelters.new_shelter') }}" class="btn btn-primary btn-sm mt-2">
+      <i class="bi bi-plus-lg me-1"></i>Add First Shelter
+    </a>
+    {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Client-side live search (supplements the server-side search)
+  const searchInput = document.getElementById('shelter-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      const q = this.value.toLowerCase().trim();
+      document.querySelectorAll('#shelters-table tbody .shelter-row').forEach(function (row) {
+        const name    = row.dataset.name    || '';
+        const address = row.dataset.address || '';
+        row.style.display = (!q || name.includes(q) || address.includes(q)) ? '' : 'none';
+      });
+    });
+  }
+</script>
+{% endblock %}

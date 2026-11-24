@@ -1,0 +1,542 @@
+{% extends "base.html" %}
+{% block title %}Shelter Recommendation Engine{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ── Hero banner ─────────────────────────────────────────────────────────── */
+.engine-hero {
+  background: #0d1b2a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 24px 28px;
+  margin-bottom: 24px;
+}
+.engine-hero h1 { color: #fff; font-size: 1.5rem; font-weight: 700; margin-bottom: 6px; }
+.engine-hero p  { color: rgba(255,255,255,.7); font-size: .88rem; margin-bottom: 0; }
+
+/* ── Weights banner ─────────────────────────────────────────────────────── */
+.weights-banner {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #3b82f6;
+  border-radius: 10px;
+  padding: 14px 20px;
+  margin-bottom: 24px;
+}
+.weight-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: .82rem;
+  color: #334155;
+}
+.weight-pill .wp-pct { font-size: 1rem; font-weight: 700; }
+
+/* ── Section cards ───────────────────────────────────────────────────────── */
+.section-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.section-card-header {
+  background: #f8fafc;
+  border-bottom: 1px solid var(--color-border);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.section-card-header h5 { margin: 0; font-size: .95rem; font-weight: 700; color: #1e293b; }
+
+/* Pending request list */
+.req-item {
+  padding: 14px 18px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  transition: background .15s;
+}
+.req-item:last-child { border-bottom: none; }
+.req-item:hover { background: #f8fafc; }
+.req-id-badge {
+  background: #1e293b;
+  color: #fff;
+  font-size: .7rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+/* Constraint toggle boxes */
+.constraint-box {
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all .18s;
+  position: relative;
+}
+.constraint-box:has(input:checked) {
+  border-color: #ef4444;
+  background: #fff5f5;
+}
+.constraint-box label { cursor: pointer; }
+.constraint-box input[type=checkbox] { display: none; }
+.constraint-toggle-indicator {
+  width: 20px; height: 20px;
+  border: 2px solid #cbd5e1;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all .15s;
+  font-size: .75rem;
+  color: transparent;
+}
+.constraint-box:has(input:checked) .constraint-toggle-indicator {
+  background: #ef4444;
+  border-color: #ef4444;
+  color: #fff;
+}
+.constraint-box:has(input:checked) .constraint-hard-label {
+  color: #ef4444;
+}
+
+/* Weight inputs */
+.weight-input-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.weight-field { flex: 1; min-width: 100px; }
+.weight-sum-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: .82rem;
+  font-weight: 600;
+  border: 1px solid;
+}
+.wsd-ok   { background:#f0fdf4; color:#166534; border-color:#bbf7d0; }
+.wsd-warn { background:#fef9c3; color:#854d0e; border-color:#fef08a; }
+
+/* Demographic inputs */
+.demo-card {
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+  transition: border-color .15s;
+}
+.demo-card:has(input:focus) { border-color: #3b82f6; }
+.demo-card .dc-icon { font-size: 1.4rem; margin-bottom: 4px; }
+.demo-card .dc-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .5px; color: #64748b; margin-bottom: 6px; }
+.demo-card input { border: none; text-align: center; font-weight: 700; font-size: 1.1rem; padding: 4px; width: 100%; background: transparent; outline: none; color: #1e293b; }
+.demo-card input::-webkit-inner-spin-button { opacity: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Engine Hero ─────────────────────────────────────────────────────────── #}
+<div class="engine-hero form-page-animate">
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+      <div class="d-flex gap-2 mb-2 flex-wrap">
+        <span class="badge px-3 py-2" style="background:rgba(59,130,246,0.2);color:#93c5fd;border:1px solid rgba(59,130,246,0.3);">
+          <i class="bi bi-diagram-3 me-1"></i>Recommendation Engine
+        </span>
+        <span class="badge px-3 py-2" style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.1);">
+          Heuristic Decision Support
+        </span>
+      </div>
+      <h1><i class="bi bi-diagram-3 me-2" style="color:#4ade80;"></i>Shelter Recommendation Engine</h1>
+      <p>
+        Multi-criteria shelter matching with strict hard constraint exclusion, configurable weighted scoring, and explainable audit trails.
+        Recommendations are <strong style="color:#fbbf24;">not guaranteed to be optimal</strong> — use as decision support only.
+      </p>
+    </div>
+    <a href="{{ url_for('requests.list_requests') }}" class="btn btn-sm flex-shrink-0"
+       style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:8px;">
+      <i class="bi bi-list-ul me-1"></i>All Requests
+    </a>
+  </div>
+</div>
+
+{# ── Active Weights Banner ────────────────────────────────────────────────── #}
+<div class="weights-banner form-page-animate">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+    <div>
+      <div class="fw-semibold text-dark small mb-1">
+        <i class="bi bi-sliders me-1 text-primary"></i>Active Scoring Weights
+        <span class="text-muted fw-normal ms-1">(configurable via system policy / .env)</span>
+      </div>
+      <div class="d-flex flex-wrap gap-2 mt-2">
+        <span class="weight-pill">
+          <i class="bi bi-geo-alt text-warning"></i>Distance
+          <span class="wp-pct text-warning">{{ (current_weights.distance * 100)|round(0)|int }}%</span>
+        </span>
+        <span class="weight-pill">
+          <i class="bi bi-pie-chart text-success"></i>Capacity
+          <span class="wp-pct text-success">{{ (current_weights.capacity * 100)|round(0)|int }}%</span>
+        </span>
+        <span class="weight-pill">
+          <i class="bi bi-hospital text-info"></i>Facilities
+          <span class="wp-pct text-info">{{ (current_weights.facilities * 100)|round(0)|int }}%</span>
+        </span>
+        <span class="weight-pill">
+          <i class="bi bi-box-seam" style="color:#0d9488;"></i>Resources
+          <span class="wp-pct" style="color:#0d9488;">{{ (current_weights.resources * 100)|round(0)|int }}%</span>
+        </span>
+      </div>
+    </div>
+    <div class="text-muted small text-end">
+      <i class="bi bi-info-circle me-1"></i>Weights are auto-normalized to sum to 100%
+    </div>
+  </div>
+</div>
+
+{# ── Two-column layout: Pending Requests + Simulation ───────────────────── #}
+<div class="row g-4">
+
+  {# ── Col 1: Evaluate Real Requests ─ #}
+  <div class="col-lg-6">
+    <div class="section-card h-100">
+      <div class="section-card-header">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:36px;height:36px;background:#0d6efd;border-radius:6px;display:flex;align-items:center;justify-content:center;">
+            <i class="bi bi-inbox-fill text-white"></i>
+          </div>
+          <h5>Evaluate Pending Requests</h5>
+        </div>
+        {% if pending_requests %}
+        <span class="badge rounded-pill" style="background:#dbeafe;color:#1e40af;">
+          {{ pending_requests|length }} Pending
+        </span>
+        {% else %}
+        <span class="badge rounded-pill" style="background:#f1f5f9;color:#64748b;">
+          0 Pending
+        </span>
+        {% endif %}
+      </div>
+
+      <div class="p-3 border-bottom" style="background:#fafcff;">
+        <p class="small text-muted mb-0">
+          Select a live field request to run candidate shelter matching against all active shelters,
+          enforce hard constraints, and view a ranked explainable recommendation.
+        </p>
+      </div>
+
+      {% if pending_requests %}
+        <div style="max-height:520px;overflow-y:auto;">
+          {% for req in pending_requests %}
+            <div class="req-item">
+              <div style="min-width:0;">
+                <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                  <span class="req-id-badge">#{{ req.id }}</span>
+                  <span class="fw-bold text-dark small">Group of {{ req.group_size }}</span>
+                  <span class="badge {{ req.status_badge_class }}">{{ req.status_label }}</span>
+                </div>
+                <div class="text-muted small mb-1 text-truncate">
+                  <i class="bi bi-geo-alt me-1 text-danger"></i>
+                  {{ req.location_name or ('Lat ' ~ req.latitude ~ ' Lon ' ~ req.longitude) }}
+                </div>
+                <div class="d-flex flex-wrap gap-1">
+                  {% for tag in req.special_needs_list %}
+                    <span class="badge bg-light text-secondary border" style="font-size:.68rem;">{{ tag }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <a href="{{ url_for('recommend.recommend_for_request', request_id=req.id) }}"
+                 id="btn-recommend-req-{{ req.id }}"
+                 class="btn btn-primary btn-sm px-3 flex-shrink-0">
+                <i class="bi bi-diagram-3 me-1"></i>Recommend
+              </a>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-check2-circle fs-2 text-success d-block mb-2"></i>
+          <p class="fw-semibold mb-1">No pending requests awaiting allocation.</p>
+          <p class="small mb-3">Use the Simulation Tester on the right to test scenarios.</p>
+          <a href="{{ url_for('requests.new_request') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-plus-circle me-1"></i>Create New Request
+          </a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Col 2: Simulation Sandbox ─ #}
+  <div class="col-lg-6">
+    <div class="section-card h-100">
+      <div class="section-card-header">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width:36px;height:36px;background:#6f42c1;border-radius:6px;display:flex;align-items:center;justify-content:center;">
+            <i class="bi bi-cpu-fill text-white"></i>
+          </div>
+          <h5>Simulation &amp; Scenario Tester</h5>
+        </div>
+        <span class="badge" style="background:#ede9fe;color:#5b21b6;border:1px solid #ddd6fe;">Custom</span>
+      </div>
+
+      <div class="p-3 border-bottom" style="background:#faf8ff;">
+        <p class="small text-muted mb-0">
+          Test recommendation behaviour under custom emergency conditions — group sizes, wheelchair requirements, medical emergencies, or tailored scoring weights.
+        </p>
+      </div>
+
+      <div class="p-4">
+        <form method="POST" action="{{ url_for('recommend.evaluate_custom') }}" id="simForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+          {# Group Size + Location #}
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small" for="sim-group-size">
+                Group Size <span class="text-danger">*</span>
+              </label>
+              <input type="number" name="group_size" id="sim-group-size"
+                     class="form-control" value="25" min="1" max="5000" required>
+              <div class="form-text small">Total number of evacuees</div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small" for="sim-location">Location Description</label>
+              <input type="text" name="location_name" id="sim-location"
+                     class="form-control" value="Shivajinagar Flood Zone">
+            </div>
+          </div>
+
+          {# Coordinates #}
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small" for="sim-lat">Latitude</label>
+              <input type="number" step="0.0001" min="-90" max="90" name="latitude" id="sim-lat"
+                     class="form-control" value="18.5204">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold small" for="sim-lon">Longitude</label>
+              <input type="number" step="0.0001" min="-180" max="180" name="longitude" id="sim-lon"
+                     class="form-control" value="73.8567">
+            </div>
+          </div>
+
+          {# Demographic Breakdown #}
+          <div class="mb-3">
+            <div class="fw-semibold small mb-2 text-dark">Vulnerable Group Breakdown (optional)</div>
+            <div class="row g-2">
+              <div class="col-4">
+                <div class="demo-card">
+                  <div class="dc-icon text-danger">🩹</div>
+                  <div class="dc-label">Injured</div>
+                  <input type="number" name="injured_count" id="sim-injured" value="0" min="0">
+                </div>
+              </div>
+              <div class="col-4">
+                <div class="demo-card">
+                  <div class="dc-icon text-warning">🧓</div>
+                  <div class="dc-label">Elderly</div>
+                  <input type="number" name="elderly_count" id="sim-elderly" value="2" min="0">
+                </div>
+              </div>
+              <div class="col-4">
+                <div class="demo-card">
+                  <div class="dc-icon text-info">👧</div>
+                  <div class="dc-label">Children</div>
+                  <input type="number" name="children_count" id="sim-children" value="5" min="0">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {# Hard Constraints — visual toggle boxes #}
+          <div class="mb-3">
+            <div class="fw-semibold small mb-2 text-dark d-flex align-items-center gap-2">
+              <i class="bi bi-shield-lock text-danger"></i>
+              Hard Constraints
+              <span class="badge bg-danger-subtle text-danger border border-danger-subtle ms-1" style="font-size:.67rem;">
+                Causes immediate exclusion if shelter lacks requirement
+              </span>
+            </div>
+            <div class="row g-2">
+              <div class="col-12">
+                <label class="constraint-box d-flex align-items-start gap-3 w-100">
+                  <input type="checkbox" name="has_disabled" id="sim_disabled" value="1">
+                  <div class="constraint-toggle-indicator" id="wc-indicator">
+                    <i class="bi bi-check2"></i>
+                  </div>
+                  <div>
+                    <div class="fw-semibold small constraint-hard-label" style="color:#475569;">
+                      <i class="bi bi-person-wheelchair me-1"></i>Require Wheelchair Accessibility
+                    </div>
+                    <div class="text-muted" style="font-size:.75rem;">
+                      Shelters without wheelchair-accessible infrastructure will be strictly excluded
+                    </div>
+                  </div>
+                </label>
+              </div>
+              <div class="col-12">
+                <label class="constraint-box d-flex align-items-start gap-3 w-100">
+                  <input type="checkbox" name="has_injured" id="sim_medical" value="1">
+                  <div class="constraint-toggle-indicator" id="med-indicator">
+                    <i class="bi bi-check2"></i>
+                  </div>
+                  <div>
+                    <div class="fw-semibold small constraint-hard-label" style="color:#475569;">
+                      <i class="bi bi-hospital me-1"></i>Require On-Site Medical Support
+                    </div>
+                    <div class="text-muted" style="font-size:.75rem;">
+                      Shelters without medical facility / medical staff will be strictly excluded
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {# Scoring Weights Accordion #}
+          <div class="accordion mb-4" id="weightsAccordion">
+            <div class="accordion-item" style="border-radius:10px;overflow:hidden;border:1px solid #e2e8f0;">
+              <h2 class="accordion-header">
+                <button class="accordion-button collapsed py-2 small fw-semibold" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#collapseWeights"
+                        style="background:#f8fafc;color:#334155;border-radius:10px;">
+                  <i class="bi bi-sliders2 me-2 text-primary"></i>Customize Scoring Weights
+                  <span class="text-muted fw-normal ms-2">(optional — auto-normalized)</span>
+                </button>
+              </h2>
+              <div id="collapseWeights" class="accordion-collapse collapse" data-bs-parent="#weightsAccordion">
+                <div class="accordion-body px-3 py-3" style="background:#fafcff;">
+                  <div class="row g-2 mb-2">
+                    <div class="col-6">
+                      <label class="small text-muted fw-semibold">
+                        <i class="bi bi-geo-alt text-warning me-1"></i>Distance Weight
+                      </label>
+                      <input type="number" step="0.05" min="0" max="1"
+                             name="weight_distance" id="w_dist" class="form-control form-control-sm weight-input"
+                             value="{{ current_weights.distance }}">
+                    </div>
+                    <div class="col-6">
+                      <label class="small text-muted fw-semibold">
+                        <i class="bi bi-pie-chart text-success me-1"></i>Capacity Weight
+                      </label>
+                      <input type="number" step="0.05" min="0" max="1"
+                             name="weight_capacity" id="w_cap" class="form-control form-control-sm weight-input"
+                             value="{{ current_weights.capacity }}">
+                    </div>
+                    <div class="col-6">
+                      <label class="small text-muted fw-semibold">
+                        <i class="bi bi-hospital text-info me-1"></i>Facilities Weight
+                      </label>
+                      <input type="number" step="0.05" min="0" max="1"
+                             name="weight_facilities" id="w_fac" class="form-control form-control-sm weight-input"
+                             value="{{ current_weights.facilities }}">
+                    </div>
+                    <div class="col-6">
+                      <label class="small text-muted fw-semibold">
+                        <i class="bi bi-box-seam me-1" style="color:#0d9488;"></i>Resources Weight
+                      </label>
+                      <input type="number" step="0.05" min="0" max="1"
+                             name="weight_resources" id="w_res" class="form-control form-control-sm weight-input"
+                             value="{{ current_weights.resources }}">
+                    </div>
+                  </div>
+                  <div class="d-flex align-items-center gap-2 mt-1">
+                    <span id="weightSumDisplay" class="weight-sum-display wsd-ok">
+                      <i class="bi bi-check-circle-fill"></i>
+                      Sum: <strong id="weightSumVal">{{ (current_weights.distance + current_weights.capacity + current_weights.facilities + current_weights.resources)|round(2) }}</strong>
+                      (auto-normalized)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" id="simSubmitBtn" class="btn btn-primary w-100 py-3 fw-semibold"
+                  style="border-radius:10px;font-size:.95rem;">
+            <i class="bi bi-play-circle-fill me-2"></i>Run Recommendation Simulation
+          </button>
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── How it works ─────────────────────────────────────────────────────────── #}
+<div class="mt-5 form-page-animate">
+  <h6 class="text-muted text-uppercase small fw-semibold mb-3" style="letter-spacing:.6px;">
+    <i class="bi bi-info-circle me-1"></i>How the 12-Step Pipeline Works
+  </h6>
+  <div class="row g-3">
+    {% set steps = [
+      ('1–2', 'bi-search', 'primary',  'Find Candidates', 'Queries all shelters, then removes non-operational shelters (inactive, damaged, closed).'),
+      ('3',   'bi-shield-lock', 'danger', 'Hard Constraints', 'Enforces strict exclusions — capacity, wheelchair access, medical support. Failures exclude, not downgrade.'),
+      ('4–8', 'bi-calculator', 'success', 'Scoring Factors',  'Distance (Haversine), safe capacity headroom, facility profile, consumable resources, and demographics.'),
+      ('9',   'bi-geo-alt', 'warning',   'Distance (km)',     'Haversine great-circle distance from incident coordinates to each shelter.'),
+      ('10',  'bi-graph-up-arrow', 'info','Occupancy Forecast','[ESTIMATE] Arrival rate from recent history → projected occupancy in next N hours.'),
+      ('11–12','bi-list-ol','secondary', 'Score & Rank',      'Weighted composite score (0–100). Ranked descending. Explainable positive + rejection reasons returned.'),
+    ] %}
+    {% for num, icon, color, title, desc in steps %}
+      <div class="col-md-6 col-xl-4">
+        <div class="d-flex gap-3 p-3 rounded-3 border" style="background:#fafcff;">
+          <div class="bg-{{ color }}-subtle rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width:36px;height:36px;">
+            <i class="bi {{ icon }} text-{{ color }}"></i>
+          </div>
+          <div>
+            <div class="fw-semibold text-dark small">Step {{ num }}: {{ title }}</div>
+            <div class="text-muted" style="font-size:.77rem;">{{ desc }}</div>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+// Live weight sum display
+(function() {
+  const inputs = document.querySelectorAll('.weight-input');
+  const display = document.getElementById('weightSumDisplay');
+  const valEl   = document.getElementById('weightSumVal');
+  if (!inputs.length) return;
+
+  function updateSum() {
+    let total = 0;
+    inputs.forEach(inp => { total += parseFloat(inp.value) || 0; });
+    total = Math.round(total * 1000) / 1000;
+    valEl.textContent = total;
+    if (total <= 0) {
+      display.className = 'weight-sum-display wsd-warn';
+      display.querySelector('i').className = 'bi bi-exclamation-circle-fill';
+    } else {
+      display.className = 'weight-sum-display wsd-ok';
+      display.querySelector('i').className = 'bi bi-check-circle-fill';
+    }
+  }
+
+  inputs.forEach(inp => inp.addEventListener('input', updateSum));
+
+  const simForm = document.getElementById('simForm');
+  if (simForm) {
+    simForm.addEventListener('submit', function() {
+      const btn = document.getElementById('simSubmitBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Evaluating Shelter Network…';
+      }
+    });
+  }
+})();
+</script>
+
+{% endblock %}

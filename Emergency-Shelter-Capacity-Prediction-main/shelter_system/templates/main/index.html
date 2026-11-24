@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}Emergency Operations Portal — Disaster Management{% endblock %}
+
+{% block content %}
+
+<!-- Hero Advisory Header -->
+<div class="card bg-dark text-white border mb-4" style="background-color: #0d1b2a; border-color: #1e293b !important;">
+  <div class="card-body p-4 p-md-5">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-8">
+        <div class="d-inline-flex align-items-center gap-2 px-3 py-1 rounded-pill bg-danger bg-opacity-25 border border-danger border-opacity-50 text-danger-emphasis mb-3 small fw-bold">
+          <i class="bi bi-broadcast"></i> ACTIVE INCIDENT MONITORING NETWORK
+        </div>
+        <h1 class="display-6 fw-bold mb-3 text-white">
+          Emergency Shelter Capacity &amp; Resource Coordination System
+        </h1>
+        <p class="lead text-light text-opacity-75 mb-4" style="font-size: 1.05rem;">
+          Real-time occupancy monitoring, safe capacity calculation, algorithmic recommendations, and multi-shelter redistribution for disaster response teams and municipal authorities.
+        </p>
+        <div class="d-flex flex-wrap gap-3">
+          {% if not current_user.is_authenticated %}
+          <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-lg px-4 fw-semibold">
+            <i class="bi bi-box-arrow-in-right me-2"></i> Authorized Portal Access
+          </a>
+          {% elif current_user.role != 'citizen' %}
+          <a href="{{ url_for('dashboard.dashboard') }}" class="btn btn-primary btn-lg px-4 fw-semibold">
+            <i class="bi bi-speedometer2 me-2"></i> Operations Dashboard
+          </a>
+          {% else %}
+          <a href="{{ url_for('requests.list_requests') }}" class="btn btn-primary btn-lg px-4 fw-semibold">
+            <i class="bi bi-clock-history me-2"></i> My Emergency Requests
+          </a>
+          {% endif %}
+          <a href="{{ url_for('requests.new_request') }}" class="btn btn-outline-light btn-lg px-4 fw-semibold">
+            <i class="bi bi-plus-circle me-2"></i> Submit Urgent Request
+          </a>
+        </div>
+      </div>
+      <div class="col-lg-4 text-center d-none d-lg-block">
+        <div class="p-4 rounded-3 border border-secondary border-opacity-25 bg-black bg-opacity-25">
+          <i class="bi bi-shield-fill-check text-primary fs-1 mb-2 d-block"></i>
+          <h6 class="text-uppercase tracking-wider text-muted small mb-1">Incident Command Hub</h6>
+          <div class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-3 py-1">
+            <i class="bi bi-circle-fill me-1 small"></i> Network Online
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Real-time Network Operational Snapshot -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100">
+      <div class="card-body p-3">
+        <div class="text-muted small text-uppercase fw-semibold mb-1">Operational Shelters</div>
+        <div class="d-flex align-items-baseline gap-2">
+          <span class="fs-2 fw-bold text-primary">{{ active_count }}</span>
+          <span class="text-muted small">active facilities</span>
+        </div>
+        <div class="text-muted small mt-1">
+          <i class="bi bi-geo-alt-fill text-secondary me-1"></i> Pune Municipal Region
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100">
+      <div class="card-body p-3">
+        <div class="text-muted small text-uppercase fw-semibold mb-1">Design Capacity</div>
+        <div class="d-flex align-items-baseline gap-2">
+          <span class="fs-2 fw-bold text-dark">{{ "{:,}".format(total_capacity) }}</span>
+          <span class="text-muted small">total beds</span>
+        </div>
+        <div class="text-muted small mt-1">
+          <i class="bi bi-building me-1"></i> Max design limit
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100">
+      <div class="card-body p-3">
+        <div class="text-muted small text-uppercase fw-semibold mb-1">Current Headroom</div>
+        <div class="d-flex align-items-baseline gap-2">
+          <span class="fs-2 fw-bold text-success">{{ "{:,}".format(available_headroom) }}</span>
+          <span class="text-muted small">spaces remaining</span>
+        </div>
+        <div class="text-muted small mt-1">
+          <i class="bi bi-people-fill text-muted me-1"></i> {{ "{:,}".format(total_occupancy) }} currently sheltered
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-6 col-lg-3">
+    <div class="card h-100 bg-danger bg-opacity-10 border-danger border-opacity-25">
+      <div class="card-body p-3">
+        <div class="text-danger small text-uppercase fw-bold mb-1">Emergency Dispatch</div>
+        <div class="d-flex align-items-baseline gap-2">
+          <span class="fs-2 fw-bold text-danger">112</span>
+          <span class="text-danger small fw-semibold">National Hotline</span>
+        </div>
+        <div class="text-danger small mt-1">
+          <i class="bi bi-telephone-fill me-1"></i> 24/7 EOC Control Desk
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Key System Roles & Action Cards -->
+<div class="row g-4 mb-4">
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body p-4">
+        <div class="d-inline-flex p-3 rounded-3 bg-primary bg-opacity-10 text-primary mb-3">
+          <i class="bi bi-speedometer2 fs-3"></i>
+        </div>
+        <h5 class="card-title fw-bold">Incident Command Dashboard</h5>
+        <p class="card-text text-muted small">
+          Comprehensive real-time telemetry: safe capacity limits, 6-hour predictive overload modeling, critical shelter alerts, and inventory deficits.
+        </p>
+        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-primary btn-sm">
+          Access Dashboard <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body p-4">
+        <div class="d-inline-flex p-3 rounded-3 bg-info bg-opacity-10 text-info mb-3">
+          <i class="bi bi-compass fs-3"></i>
+        </div>
+        <h5 class="card-title fw-bold">Smart Recommendation Engine</h5>
+        <p class="card-text text-muted small">
+          Automated multi-factor candidate scoring considering Haversine distance, medical care, wheelchair access, safe margins, and predicted future load.
+        </p>
+        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-sm">
+          Submit Evacuation Needs <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body p-4">
+        <div class="d-inline-flex p-3 rounded-3 bg-warning bg-opacity-10 text-warning mb-3">
+          <i class="bi bi-diagram-3-fill fs-3"></i>
+        </div>
+        <h5 class="card-title fw-bold">Redistribution &amp; Locking</h5>
+        <p class="card-text text-muted small">
+          Safely partition overflow evacuee cohorts across multiple facilities with strict InnoDB transaction row-level locking to eliminate over-allocation races.
+        </p>
+        <a href="{{ url_for('auth.login') }}" class="btn btn-outline-secondary btn-sm">
+          Response Team Portal <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Public Guidelines & Emergency Helplines -->
+<div class="card mb-4">
+  <div class="card-header bg-light py-3 border-bottom">
+    <h6 class="mb-0 fw-bold text-dark">
+      <i class="bi bi-info-circle text-primary me-2"></i> Important Guidelines for Evacuation &amp; Emergency Reporting
+    </h6>
+  </div>
+  <div class="card-body p-4">
+    <div class="row g-4">
+      <div class="col-md-6">
+        <h6 class="fw-bold mb-2">Instructions for Field Responders &amp; Citizens</h6>
+        <ul class="text-muted small ps-3 mb-0" style="line-height: 1.8;">
+          <li>Report group numbers accurately, highlighting special medical and mobility needs.</li>
+          <li>Do not self-evacuate to critical or full shelters; consult the live system recommendations.</li>
+          <li>Shelter managers must keep occupancy records up-to-date every 2 hours during active alerts.</li>
+          <li>For life-threatening emergencies, contact national emergency dispatch immediately.</li>
+        </ul>
+      </div>
+      <div class="col-md-6">
+        <h6 class="fw-bold mb-2">Key Emergency Helplines</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered text-muted small mb-0">
+            <tbody>
+              <tr>
+                <td class="fw-semibold text-dark">National Emergency Service</td>
+                <td class="text-danger fw-bold">112</td>
+              </tr>
+              <tr>
+                <td class="fw-semibold text-dark">Disaster Management Cell (Pune)</td>
+                <td>020-25501269 / 020-25506800</td>
+              </tr>
+              <tr>
+                <td class="fw-semibold text-dark">Medical Ambulance / First Response</td>
+                <td>108</td>
+              </tr>
+              <tr>
+                <td class="fw-semibold text-dark">Fire &amp; Rescue Command</td>
+                <td>101</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

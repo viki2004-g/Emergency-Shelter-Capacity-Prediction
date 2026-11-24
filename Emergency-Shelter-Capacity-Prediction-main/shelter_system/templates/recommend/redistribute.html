@@ -1,0 +1,638 @@
+{% extends "base.html" %}
+{% block title %}Group Redistribution Plan — {{ req.group_size }} Evacuees{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ── Redistribution Visual Pipeline ───────────────────────────────────────── */
+/* Visual flow connector arrow */
+.flow-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 12px 0;
+  position: relative;
+}
+.flow-connector .flow-line {
+  width: 2px;
+  height: 24px;
+  background: #94a3b8;
+}
+.flow-connector .flow-arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+/* Card styling */
+.pipeline-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.pipeline-header {
+  padding: 16px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.step-number {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #1e293b;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Incoming group hero */
+.incoming-hero {
+  background: #0d1b2a;
+  color: #fff;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 24px 28px;
+}
+.group-size-pill {
+  background: rgba(34,197,94,0.18);
+  border: 1px solid rgba(34,197,94,0.4);
+  color: #4ade80;
+  font-size: 1.4rem;
+  font-weight: 800;
+  padding: 4px 18px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Allocation Plan Table */
+.alloc-row {
+  transition: background 0.15s;
+}
+.alloc-row:hover {
+  background: #f8fafc;
+}
+.alloc-quota-badge {
+  background: #0d6efd;
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 800;
+  padding: 6px 16px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Capacity bar before/after */
+.cap-progress-wrap {
+  position: relative;
+  background: #e2e8f0;
+  border-radius: 6px;
+  height: 14px;
+  overflow: hidden;
+}
+.cap-bar-current {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  background: #64748b;
+  border-radius: 6px 0 0 6px;
+  transition: width 0.8s ease;
+}
+.cap-bar-allocated {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: #198754;
+  transition: width 0.8s ease;
+}
+.safe-limit-line {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: #f59e0b;
+  z-index: 5;
+}
+
+/* Total allocated banner */
+.total-banner-success {
+  background: #f0fdf4;
+  border: 2px solid #86efac;
+  border-radius: 12px;
+  padding: 18px 24px;
+}
+.total-banner-danger {
+  background: #fff5f5;
+  border: 2px solid #fca5a5;
+  border-radius: 12px;
+  padding: 18px 24px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 max-w-1200" style="max-width: 1200px;">
+
+  {# ── Header / Breadcrumb ───────────────────────────────────────────────── #}
+  <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-1 small">
+          <li class="breadcrumb-item"><a href="{{ url_for('recommend.recommend_form') }}">Recommendation</a></li>
+          {% if not is_simulation and req.id %}
+            <li class="breadcrumb-item"><a href="{{ url_for('recommend.recommend_for_request', request_id=req.id) }}">Request #{{ req.id }}</a></li>
+          {% endif %}
+          <li class="breadcrumb-item active">Redistribution Plan</li>
+        </ol>
+      </nav>
+      <h2 class="h3 fw-bold text-dark mb-0">Multi-Shelter Redistribution Engine</h2>
+      <p class="text-muted small mb-0">Partitions an incoming group across multiple shelters when no single shelter can safely fit them all.</p>
+    </div>
+    <div class="d-flex gap-2">
+      {% if not is_simulation and req.id %}
+        <a href="{{ url_for('recommend.recommend_for_request', request_id=req.id) }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-left me-1"></i>Single-Shelter Evaluation
+        </a>
+      {% else %}
+        <a href="{{ url_for('recommend.recommend_form') }}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-left me-1"></i>Back to Simulator
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Informational Notice ──────────────────────────────────────────────── #}
+  <div class="alert alert-warning border-warning-subtle d-flex align-items-center gap-3 py-2 px-3 mb-4 rounded-3">
+    <i class="bi bi-shield-lock-fill text-warning fs-4"></i>
+    <div class="small">
+      <strong>Deferred Occupancy Policy:</strong> The redistribution plan below is an emergency proposal.
+      <strong>Shelter occupancies are NOT altered</strong> until the allocation is explicitly confirmed.
+    </div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════════════════════
+     PIPELINE STEP 1: INCOMING GROUP
+     ═══════════════════════════════════════════════════════════════════════════ #}
+  <div class="incoming-hero redist-animate mb-2">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3 mb-3">
+      <div class="d-flex align-items-center gap-3">
+        <span class="step-number bg-white text-dark">1</span>
+        <div>
+          <div class="text-white-50 text-uppercase small fw-bold" style="letter-spacing:.6px;">Incoming Group</div>
+          <h3 class="fw-bold text-white mb-0">
+            {% if is_simulation %}
+              Emergency Simulation Scenario
+            {% else %}
+              Request #{{ req.id }} — {{ req.location_name or 'Field Incident Site' }}
+            {% endif %}
+          </h3>
+        </div>
+      </div>
+      <div>
+        <span class="group-size-pill">
+          <i class="bi bi-people-fill"></i>
+          {{ plan.total_requested }} Evacuees
+        </span>
+      </div>
+    </div>
+
+    <div class="row g-3 pt-2 border-top border-secondary border-opacity-25">
+      <div class="col-md-4">
+        <div class="text-white-50 small">Incident Location</div>
+        <div class="fw-semibold text-white">
+          <i class="bi bi-geo-alt-fill text-danger me-1"></i>
+          {{ "%.4f"|format(req.latitude) }}, {{ "%.4f"|format(req.longitude) }}
+          {% if req.location_name %}<span class="text-white-50">({{ req.location_name }})</span>{% endif %}
+        </div>
+      </div>
+      <div class="col-md-5">
+        <div class="text-white-50 small">Demographic Breakdown</div>
+        <div class="d-flex flex-wrap gap-2 mt-1">
+          {% if req.injured_count > 0 %}
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-bandaid me-1"></i>{{ req.injured_count }} Injured</span>
+          {% endif %}
+          {% if req.elderly_count > 0 %}
+            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"><i class="bi bi-person-cane me-1"></i>{{ req.elderly_count }} Elderly</span>
+          {% endif %}
+          {% if req.children_count > 0 %}
+            <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle"><i class="bi bi-person me-1"></i>{{ req.children_count }} Children</span>
+          {% endif %}
+          {% if not (req.injured_count or req.elderly_count or req.children_count) %}
+            <span class="badge bg-light text-dark">General Evacuee Group</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-md-3">
+        <div class="text-white-50 small">Special Requirements</div>
+        <div class="d-flex flex-wrap gap-1 mt-1">
+          {% if req.has_disabled or req.accessibility_requirements %}
+            <span class="badge bg-primary"><i class="bi bi-person-wheelchair me-1"></i>Wheelchair</span>
+          {% endif %}
+          {% if req.has_injured or req.medical_requirements %}
+            <span class="badge bg-danger"><i class="bi bi-hospital me-1"></i>Medical</span>
+          {% endif %}
+          {% if not (req.has_disabled or req.accessibility_requirements or req.has_injured or req.medical_requirements) %}
+            <span class="text-white-50 small">Standard intake</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── CONNECTOR ARROW ───────────────────────────────────────────────────── #}
+  <div class="flow-connector">
+    <div class="flow-line"></div>
+    <div class="flow-arrow"><i class="bi bi-arrow-down"></i></div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════════════════════
+     PIPELINE STEP 2: CANDIDATE SHELTERS
+     ═══════════════════════════════════════════════════════════════════════════ #}
+  <div class="pipeline-card redist-animate mb-2">
+    <div class="pipeline-header">
+      <div class="d-flex align-items-center gap-2">
+        <span class="step-number">2</span>
+        <h5 class="mb-0 fw-bold text-dark">Candidate Shelters ({{ plan.candidate_shelters|length }} eligible)</h5>
+      </div>
+      <div class="small text-muted">
+        Total network safe capacity available: <strong>{{ plan.total_network_safe_capacity }}</strong> spots
+      </div>
+    </div>
+
+    <div class="p-3">
+      {% if plan.candidate_shelters %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light small text-uppercase text-muted">
+              <tr>
+                <th style="width:60px;">Rank</th>
+                <th>Shelter</th>
+                <th class="text-center">Safe Available</th>
+                <th class="text-center">Proximity</th>
+                <th class="text-center">Predicted Trend</th>
+                <th class="text-center">Suitability Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for cand in plan.candidate_shelters %}
+                <tr>
+                  <td>
+                    <span class="badge bg-dark rounded-pill">#{{ cand.rank }}</span>
+                  </td>
+                  <td>
+                    <div class="fw-bold text-dark">{{ cand.name }}</div>
+                    <div class="text-muted small">{{ cand.address }}</div>
+                    <div class="d-flex gap-1 mt-1">
+                      {% if cand.facility and cand.facility.has_medical_support %}
+                        <span class="badge bg-danger-subtle text-danger" style="font-size:.65rem;"><i class="bi bi-hospital"></i> Medical</span>
+                      {% endif %}
+                      {% if cand.facility and cand.facility.has_wheelchair_access %}
+                        <span class="badge bg-primary-subtle text-primary" style="font-size:.65rem;"><i class="bi bi-person-wheelchair"></i> Wheelchair</span>
+                      {% endif %}
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    <span class="fw-bold fs-6 text-success">{{ cand.safe_available_capacity }}</span>
+                    <div class="text-muted" style="font-size:.72rem;">spots safe limit</div>
+                  </td>
+                  <td class="text-center">
+                    <div class="fw-semibold text-dark">{{ cand.distance_km }} km</div>
+                    <span class="badge bg-light text-secondary border" style="font-size:.68rem;">{{ cand.distance_label }}</span>
+                  </td>
+                  <td class="text-center">
+                    {% if cand.prediction.has_prediction %}
+                      <span class="badge bg-{{ cand.prediction.risk_display.css }}-subtle text-{{ cand.prediction.risk_display.css }} border border-{{ cand.prediction.risk_display.css }}-subtle">
+                        {{ cand.prediction.risk_label }} ({{ cand.prediction.predicted_pct }}% in {{ cand.prediction.hours_ahead }}h)
+                      </span>
+                    {% else %}
+                      <span class="text-muted small">Stable (no trend)</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center">
+                    <span class="fw-bold fs-6 text-primary">{{ cand.score }}</span>
+                    <span class="text-muted small">/ 100</span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center py-4 text-muted">
+          <i class="bi bi-exclamation-triangle text-danger fs-2 d-block mb-2"></i>
+          <div class="fw-semibold">No shelters met the eligibility criteria.</div>
+          <div class="small">Check disqualified shelters below for exact exclusion reasons.</div>
+        </div>
+      {% endif %}
+
+      {# Disqualified shelters collapsible #}
+      {% if plan.unsuitable_shelters %}
+        <div class="mt-3 pt-3 border-top">
+          <a class="text-decoration-none text-muted small fw-semibold" data-bs-toggle="collapse" href="#unsuitableList" role="button">
+            <i class="bi bi-chevron-down me-1"></i>View {{ plan.unsuitable_shelters|length }} Disqualified / Unsuitable Shelter(s)
+          </a>
+          <div class="collapse mt-2" id="unsuitableList">
+            <div class="table-responsive">
+              <table class="table table-sm table-bordered mb-0 small">
+                <thead class="table-light text-muted">
+                  <tr>
+                    <th>Shelter</th>
+                    <th>Reason Disqualified</th>
+                    <th>Category</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for uns in plan.unsuitable_shelters %}
+                    <tr>
+                      <td class="fw-semibold">{{ uns.shelter.name }}</td>
+                      <td class="text-danger">{{ uns.reason }}</td>
+                      <td><span class="badge bg-secondary">{{ uns.category }}</span></td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── CONNECTOR ARROW ───────────────────────────────────────────────────── #}
+  <div class="flow-connector">
+    <div class="flow-line"></div>
+    <div class="flow-arrow"><i class="bi bi-arrow-down"></i></div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════════════════════
+     PIPELINE STEP 3: ALLOCATION PLAN
+     ═══════════════════════════════════════════════════════════════════════════ #}
+  <div class="pipeline-card redist-animate mb-2">
+    <div class="pipeline-header bg-primary-subtle border-primary-subtle">
+      <div class="d-flex align-items-center gap-2">
+        <span class="step-number bg-primary text-white">3</span>
+        <h5 class="mb-0 fw-bold text-primary-emphasis">Proposed Allocation Plan</h5>
+      </div>
+      <div class="small text-primary-emphasis fw-semibold">
+        Partitioned across {{ plan.allocations|length }} shelter(s)
+      </div>
+    </div>
+
+    <div class="p-3">
+      {% if plan.allocations %}
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light small text-uppercase text-muted">
+              <tr>
+                <th style="width:130px;">Allocated Quota</th>
+                <th>Destination Shelter</th>
+                <th class="text-center">Safe Cap Before</th>
+                <th class="text-center">Safe Cap After</th>
+                <th>Rationale &amp; Metrics</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for alloc in plan.allocations %}
+                <tr class="alloc-row">
+                  <td>
+                    <span class="alloc-quota-badge">
+                      <i class="bi bi-person-fill"></i>
+                      {{ alloc.allocated_count }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="fw-bold fs-6 text-dark">{{ alloc.shelter_name }}</div>
+                    <div class="text-muted small">{{ alloc.shelter_address }}</div>
+                    <div class="text-muted" style="font-size:.74rem;">
+                      {{ alloc.distance_label }} · {{ alloc.distance_km }} km away · Ranking Score: {{ alloc.score }}
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    <span class="fw-semibold text-secondary">{{ alloc.safe_available_before }}</span>
+                    <div class="text-muted" style="font-size:.7rem;">spots safe</div>
+                  </td>
+                  <td class="text-center">
+                    <span class="fw-bold {% if alloc.safe_available_after == 0 %}text-danger{% else %}text-success{% endif %}">
+                      {{ alloc.safe_available_after }}
+                    </span>
+                    <div class="text-muted" style="font-size:.7rem;">headroom left</div>
+                  </td>
+                  <td>
+                    <ul class="list-unstyled mb-0 small">
+                      {% for r in alloc.reasons %}
+                        <li class="text-muted mb-1"><i class="bi bi-check2-circle text-success me-1"></i>{{ r }}</li>
+                      {% endfor %}
+                    </ul>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="text-center py-4 text-danger fw-semibold">
+          No allocations could be generated.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── CONNECTOR ARROW ───────────────────────────────────────────────────── #}
+  <div class="flow-connector">
+    <div class="flow-line"></div>
+    <div class="flow-arrow"><i class="bi bi-arrow-down"></i></div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════════════════════
+     PIPELINE STEP 4: TOTAL ALLOCATED VERIFICATION
+     ═══════════════════════════════════════════════════════════════════════════ #}
+  <div class="pipeline-card redist-animate mb-2">
+    <div class="pipeline-header">
+      <div class="d-flex align-items-center gap-2">
+        <span class="step-number">4</span>
+        <h5 class="mb-0 fw-bold text-dark">Total Allocated (Verification Check)</h5>
+      </div>
+      <div class="small">
+        Rule: <code>allocated people == requested people</code>
+      </div>
+    </div>
+
+    <div class="p-3">
+      {% if plan.is_possible %}
+        <div class="total-banner-success d-flex align-items-center justify-content-between flex-wrap gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="fs-1 text-success"><i class="bi bi-check-circle-fill"></i></div>
+            <div>
+              <h4 class="fw-bold text-success-emphasis mb-1">
+                {{ plan.total_allocated }} of {{ plan.total_requested }} Allocated (100% Placed)
+              </h4>
+              <p class="text-success-emphasis small mb-0">{{ plan.explanation }}</p>
+            </div>
+          </div>
+          <div>
+            <span class="badge bg-success fs-6 px-3 py-2 rounded-pill">
+              <i class="bi bi-shield-check me-1"></i>VERIFICATION PASSED
+            </span>
+          </div>
+        </div>
+      {% else %}
+        <div class="total-banner-danger d-flex align-items-center justify-content-between flex-wrap gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="fs-1 text-danger"><i class="bi bi-x-circle-fill"></i></div>
+            <div>
+              <h4 class="fw-bold text-danger mb-1">
+                Redistribution Impossible — Shortfall of {{ plan.unallocated_count }} Evacuee(s)
+              </h4>
+              <p class="text-danger-emphasis small mb-0">{{ plan.explanation }}</p>
+            </div>
+          </div>
+          <div>
+            <span class="badge bg-danger fs-6 px-3 py-2 rounded-pill">
+              <i class="bi bi-exclamation-octagon me-1"></i>CAPACITY DEFICIT
+            </span>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── CONNECTOR ARROW ───────────────────────────────────────────────────── #}
+  <div class="flow-connector">
+    <div class="flow-line"></div>
+    <div class="flow-arrow"><i class="bi bi-arrow-down"></i></div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════════════════════
+     PIPELINE STEP 5: REMAINING CAPACITY
+     ═══════════════════════════════════════════════════════════════════════════ #}
+  <div class="pipeline-card redist-animate mb-4">
+    <div class="pipeline-header">
+      <div class="d-flex align-items-center gap-2">
+        <span class="step-number">5</span>
+        <h5 class="mb-0 fw-bold text-dark">Remaining Capacity (Before vs After Projection)</h5>
+      </div>
+      <div class="small text-muted">
+        Amber line denotes designated Safe Planning Limit
+      </div>
+    </div>
+
+    <div class="p-3">
+      {% if plan.allocations %}
+        <div class="row g-3">
+          {% for alloc in plan.allocations %}
+            {% set sh = alloc.shelter %}
+            <div class="col-md-6">
+              <div class="border rounded-3 p-3 bg-light bg-opacity-50">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="fw-bold text-dark">{{ alloc.shelter_name }}</span>
+                  <span class="badge bg-secondary-subtle text-secondary small">
+                    Safe Limit: {{ sh.safe_limit }}% ({{ sh.safe_capacity }} max)
+                  </span>
+                </div>
+
+                {# Before vs after visual bar #}
+                <div class="cap-progress-wrap mb-2">
+                  {# Safe limit marker line #}
+                  <div class="safe-limit-line" style="left: {{ sh.safe_limit }}%;" title="Safe Limit {{ sh.safe_limit }}%"></div>
+                  {# Current occupancy #}
+                  <div class="cap-bar-current" data-score-width="{{ [sh.occupancy_pct, 100]|min }}"></div>
+                  {# New allocated segment #}
+                  {% set alloc_pct = ((alloc.allocated_count / sh.max_capacity) * 100)|round(1) if sh.max_capacity > 0 else 0 %}
+                  <div class="cap-bar-allocated"
+                       style="left: {{ [sh.occupancy_pct, 100]|min }}%; width: {{ alloc_pct }}%;"></div>
+                </div>
+
+                <div class="d-flex justify-content-between small text-muted">
+                  <span>Current: <strong>{{ alloc.current_occupancy }}</strong></span>
+                  <span class="text-success fw-semibold">+{{ alloc.allocated_count }} New</span>
+                  <span>Projected: <strong>{{ alloc.projected_occupancy }} / {{ alloc.max_capacity }}</strong> ({{ alloc.projected_pct }}%)</span>
+                  <span class="text-dark fw-bold">Safe Left: {{ alloc.safe_available_after }}</span>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-center py-3 text-muted small">No allocation data to project.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ═══════════════════════════════════════════════════════════════════════════
+     CONFIRMATION & ACTION AREA
+     ═══════════════════════════════════════════════════════════════════════════ #}
+  <div class="card mb-4">
+    <div class="card-body p-4 text-center">
+      {% if plan.is_possible %}
+        {% if not is_simulation and req.id %}
+          <h4 class="fw-bold text-dark mb-2">Ready to Confirm Allocation?</h4>
+          <p class="text-muted small mx-auto mb-3" style="max-width: 600px;">
+            Confirming will atomically update shelter occupancy counts, record history log entries,
+            and mark Request #{{ req.id }} as allocated.
+          </p>
+
+          <form action="{{ url_for('recommend.confirm_redistribution', request_id=req.id) }}" method="POST" class="d-inline-block" id="confirmAllocForm" onsubmit="return confirm('Confirm and commit this group redistribution plan? Shelter occupancies will be updated in the database.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <div class="input-group mb-3 mx-auto" style="max-width: 500px;">
+              <input type="text" name="notes" class="form-control form-control-sm" placeholder="Optional allocation notes / dispatch instructions">
+              <button type="submit" class="btn btn-success px-4 fw-bold" id="btnConfirmAlloc">
+                <i class="bi bi-check-circle-fill me-1"></i>Confirm &amp; Execute Allocation
+              </button>
+            </div>
+          </form>
+        {% else %}
+          <div class="alert alert-info d-inline-block px-4 py-2 mb-0">
+            <i class="bi bi-info-circle me-1"></i><strong>Simulation Mode:</strong> This was a test scenario. No database records will be altered.
+          </div>
+        {% endif %}
+      {% else %}
+        <div class="alert alert-danger d-inline-block px-4 py-2 mb-0">
+          <i class="bi bi-slash-circle me-1"></i><strong>Allocation Blocked:</strong> Cannot execute redistribution because the total network safe capacity is insufficient.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# Mandatory transparency disclaimer #}
+  <div class="text-center text-muted small py-2">
+    <i class="bi bi-info-circle me-1"></i>{{ plan.disclaimer }}
+  </div>
+
+</div>
+
+{# ── Set widths directly & submit spinner ────────────────────────────────── #}
+<script>
+(function() {
+  document.querySelectorAll('[data-score-width]').forEach(function(el) {
+    const w = parseFloat(el.getAttribute('data-score-width')) || 0;
+    el.style.width = Math.min(100, Math.max(0, w)) + '%';
+  });
+
+  const form = document.getElementById('confirmAllocForm');
+  if (form) {
+    form.addEventListener('submit', function() {
+      const btn = document.getElementById('btnConfirmAlloc');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Executing Allocation…';
+      }
+    });
+  }
+})();
+</script>
+{% endblock %}

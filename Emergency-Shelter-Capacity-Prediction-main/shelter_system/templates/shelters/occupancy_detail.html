@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+{% block title %}Occupancy Tracking — {{ shelter.name }}{% endblock %}
+
+{% block content %}
+
+<!-- ── Breadcrumb & Navigation ──────────────────────────────────────────────── -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{{ url_for('shelters.list_shelters') }}" class="text-decoration-none">Shelters</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('shelters.shelter_detail', shelter_id=shelter.id) }}" class="text-decoration-none">{{ shelter.name }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Occupancy Tracking</li>
+  </ol>
+</nav>
+
+<!-- ── Shelter Header ───────────────────────────────────────────────────────── -->
+<div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="op-badge op-badge-{{ shelter.status }}">{{ shelter.status_label }}</span>
+      <span class="cap-badge cap-badge-{{ shelter.capacity_status }}">
+        {{ shelter.capacity_status_label }} ({{ shelter.occupancy_pct }}%)
+      </span>
+      {% if shelter.safe_limit_pct %}
+      <span class="badge bg-light text-dark border">
+        Custom Safe Limit: {{ shelter.safe_limit_pct }}%
+      </span>
+      {% endif %}
+    </div>
+    <h1 class="page-title mb-1">{{ shelter.name }} — Occupancy Telemetry</h1>
+    <p class="page-subtitle text-muted mb-0">
+      <i class="bi bi-geo-alt me-1"></i>{{ shelter.address }}
+      {% if shelter.manager %}
+      &bull; <i class="bi bi-person-badge ms-2 me-1"></i>Manager: <strong>{{ shelter.manager.full_name }}</strong>
+      {% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('shelters.occupancy_overview') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-grid-3x3-gap me-1"></i>All Shelters Monitor
+    </a>
+    <a href="{{ url_for('shelters.shelter_detail', shelter_id=shelter.id) }}" class="btn btn-light border btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Detail
+    </a>
+  </div>
+</div>
+
+<!-- ── Core Capacity Metrics (Formulas Applied) ─────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <!-- 1. Current Occupancy -->
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card h-100 border-start border-4 border-primary">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="stat-card-label text-uppercase small text-muted fw-semibold">Current Occupancy</span>
+        <i class="bi bi-people text-primary fs-5"></i>
+      </div>
+      <div class="d-flex align-items-baseline gap-2">
+        <span class="stat-card-val text-primary" id="metric-curr-occ">{{ shelter.current_occupancy }}</span>
+        <span class="text-muted fw-semibold">/ {{ shelter.max_capacity }} max</span>
+      </div>
+      <div class="stat-card-hint mt-2">
+        <div class="d-flex justify-content-between small text-muted mb-1">
+          <span>Load</span>
+          <span class="fw-bold text-dark" id="metric-occ-pct">{{ shelter.occupancy_pct }}%</span>
+        </div>
+        <div class="cap-bar position-relative" style="height: 6px;">
+          <div class="cap-bar-fill cap-bar-{{ shelter.capacity_status }}"
+               id="metric-bar-fill"
+               style="width: {{ [shelter.occupancy_pct, 100]|min }}%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Available Capacity -->
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card h-100 border-start border-4 {% if shelter.available_capacity <= 0 %}border-danger{% elif shelter.available_capacity < 50 %}border-warning{% else %}border-success{% endif %}">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="stat-card-label text-uppercase small text-muted fw-semibold">Available Capacity</span>
+        <i class="bi bi-door-open text-success fs-5"></i>
+      </div>
+      <div class="stat-card-val {% if shelter.available_capacity <= 0 %}text-danger{% elif shelter.available_capacity < 50 %}text-warning{% else %}text-success{% endif %}" id="metric-avail-cap">
+        {{ shelter.available_capacity }}
+      </div>
+      <div class="stat-card-hint text-muted mt-2 small">
+        <code>Max ({{ shelter.max_capacity }}) - Occupancy ({{ shelter.current_occupancy }})</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Safe Available Capacity -->
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card h-100 border-start border-4 {% if shelter.safe_available_capacity <= 0 %}border-danger{% elif shelter.safe_available_capacity < 50 %}border-warning{% else %}border-info{% endif %}">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="stat-card-label text-uppercase small text-muted fw-semibold">Safe Available</span>
+        <i class="bi bi-shield-check text-info fs-5"></i>
+      </div>
+      <div class="stat-card-val {% if shelter.safe_available_capacity <= 0 %}text-danger{% elif shelter.safe_available_capacity < 50 %}text-warning{% else %}text-info{% endif %}" id="metric-safe-avail-cap">
+        {{ shelter.safe_available_capacity }}
+      </div>
+      <div class="stat-card-hint text-muted mt-2 small">
+        Planning cap ({{ shelter.safe_capacity }} @ {{ shelter.safe_limit }}%) - Occ
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Occupancy Status -->
+  <div class="col-md-3 col-sm-6">
+    <div class="stat-card h-100 border-start border-4 border-secondary">
+      <div class="d-flex justify-content-between align-items-center mb-1">
+        <span class="stat-card-label text-uppercase small text-muted fw-semibold">Occupancy Status</span>
+        <i class="bi bi-speedometer2 text-secondary fs-5"></i>
+      </div>
+      <div class="d-flex align-items-center gap-2 mt-1">
+        <span class="cap-badge cap-badge-{{ shelter.capacity_status }} fs-6 py-1 px-3" id="metric-status-badge">
+          {{ shelter.capacity_status_label }}
+        </span>
+      </div>
+      <div class="stat-card-hint text-muted mt-2 small" id="metric-status-hint">
+        {% if shelter.capacity_status == 'safe' %}
+          0–{{ thresholds.safe|int }}%: Safe operating capacity
+        {% elif shelter.capacity_status == 'moderate' %}
+          {{ thresholds.safe|int + 1 }}–{{ thresholds.moderate|int }}%: Moderate load
+        {% elif shelter.capacity_status == 'high' %}
+          {{ thresholds.moderate|int + 1 }}–{{ thresholds.high|int }}%: High load
+        {% elif shelter.capacity_status == 'critical' %}
+          {{ thresholds.high|int + 1 }}–{{ thresholds.critical|int }}%: Critical limit
+        {% else %}
+          Above {{ thresholds.critical|int }}%: Overcrowded!
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Interactive Capacity Visualizer & Configuration Explainer ─────────────── -->
+<div class="card mb-4">
+  <div class="card-body p-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div>
+        <h6 class="fw-bold mb-0"><i class="bi bi-diagram-2 me-1 text-primary"></i>Capacity Breakdown & Safe Planning Limit</h6>
+        <div class="text-muted small">Visual distribution showing current occupancy vs safe planning threshold vs maximum physical capacity</div>
+      </div>
+      <div class="badge bg-light text-dark border px-3 py-2">
+        Safe Planning Limit: <strong>{{ shelter.safe_limit }}%</strong> = <strong>{{ shelter.safe_capacity }} people</strong>
+      </div>
+    </div>
+
+    <!-- Enhanced multi-point progress track -->
+    <div class="position-relative my-4" style="height: 24px; background: #e9ecef; border-radius: 12px; overflow: visible;">
+      <!-- Fill bar -->
+      <div class="cap-bar-fill cap-bar-{{ shelter.capacity_status }}"
+           id="visual-progress-fill"
+           style="width: {{ [shelter.occupancy_pct, 100]|min }}%; height: 100%; border-radius: 12px; transition: width 0.3s ease;"></div>
+
+      <!-- Safe limit vertical line marker -->
+      <div style="position: absolute; top: -6px; bottom: -6px; left: {{ [shelter.safe_limit, 100]|min }}%; width: 3px; background: #0d6efd; z-index: 5;"
+           title="Safe Planning Limit: {{ shelter.safe_limit }}% ({{ shelter.safe_capacity }} people)">
+        <span class="badge bg-primary text-white position-absolute" style="top: -24px; left: 50%; transform: translateX(-50%); font-size: 0.7rem; white-space: nowrap;">
+          Safe Limit ({{ shelter.safe_limit }}%)
+        </span>
+      </div>
+
+      <!-- Max limit vertical line marker -->
+      <div style="position: absolute; top: -6px; bottom: -6px; right: 0; width: 3px; background: #dc3545; z-index: 5;"
+           title="Absolute Maximum: 100% ({{ shelter.max_capacity }} people)">
+        <span class="badge bg-danger text-white position-absolute" style="bottom: -24px; right: 0; font-size: 0.7rem; white-space: nowrap;">
+          Max: {{ shelter.max_capacity }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Threshold Legend -->
+    <div class="row g-2 mt-4 pt-2 border-top text-center small">
+      <div class="col">
+        <div class="p-2 rounded bg-success-subtle text-success border border-success-subtle">
+          <strong>Safe</strong><br>0–{{ thresholds.safe|int }}%
+        </div>
+      </div>
+      <div class="col">
+        <div class="p-2 rounded bg-info-subtle text-info border border-info-subtle">
+          <strong>Moderate</strong><br>{{ thresholds.safe|int + 1 }}–{{ thresholds.moderate|int }}%
+        </div>
+      </div>
+      <div class="col">
+        <div class="p-2 rounded bg-warning-subtle text-warning border border-warning-subtle">
+          <strong>High</strong><br>{{ thresholds.moderate|int + 1 }}–{{ thresholds.high|int }}%
+        </div>
+      </div>
+      <div class="col">
+        <div class="p-2 rounded bg-danger-subtle text-danger border border-danger-subtle">
+          <strong>Critical</strong><br>{{ thresholds.high|int + 1 }}–{{ thresholds.critical|int }}%
+        </div>
+      </div>
+      <div class="col">
+        <div class="p-2 rounded bg-dark-subtle text-dark border border-dark-subtle">
+          <strong>Overcrowded</strong><br>> {{ thresholds.critical|int }}%
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Update Occupancy Panel (For Managers & Admins) ────────────────────────── -->
+{% if current_user.can_manage_shelters() and (current_user.role == 'admin' or shelter.managed_by == current_user.id) %}
+<div class="card mb-4">
+  <div class="card-header bg-transparent py-3 border-bottom d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-pencil-square text-primary"></i>
+      <h5 class="mb-0 fw-semibold">Record Occupancy Update</h5>
+    </div>
+    <span class="badge bg-primary-subtle text-primary">Appends to History</span>
+  </div>
+
+  <div class="card-body p-4">
+    <form method="POST" action="{{ url_for('shelters.update_occupancy', shelter_id=shelter.id) }}" id="occ-update-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="next" value="occupancy"/>
+
+      <div class="row g-4 align-items-end">
+        <!-- Input & Quick Steppers -->
+        <div class="col-lg-6">
+          <label for="occ-input-val" class="form-label fw-semibold text-dark mb-1">
+            New Occupancy Count <span class="text-danger">*</span>
+          </label>
+          <div class="input-group mb-2">
+            <span class="input-group-text bg-light"><i class="bi bi-people text-muted"></i></span>
+            <input type="number" class="form-control form-control-lg" id="occ-input-val" name="current_occupancy"
+                   min="0" value="{{ shelter.current_occupancy }}" required autocomplete="off"/>
+            <button type="submit" class="btn btn-primary px-4 fw-semibold" id="btn-submit-occ">
+              <i class="bi bi-check-circle me-1"></i>Save &amp; Log
+            </button>
+          </div>
+
+          <!-- Quick Delta Adjustment Pill Buttons -->
+          <div class="d-flex flex-wrap gap-1 align-items-center">
+            <span class="text-muted small me-1">Quick adjust:</span>
+            <button type="button" class="btn btn-xs btn-outline-secondary quick-delta" data-delta="-50">-50</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary quick-delta" data-delta="-25">-25</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary quick-delta" data-delta="-10">-10</button>
+            <button type="button" class="btn btn-xs btn-outline-secondary quick-delta" data-delta="-1">-1</button>
+            <button type="button" class="btn btn-xs btn-outline-primary quick-delta" data-delta="1">+1</button>
+            <button type="button" class="btn btn-xs btn-outline-primary quick-delta" data-delta="10">+10</button>
+            <button type="button" class="btn btn-xs btn-outline-primary quick-delta" data-delta="25">+25</button>
+            <button type="button" class="btn btn-xs btn-outline-primary quick-delta" data-delta="50">+50</button>
+            <button type="button" class="btn btn-xs btn-light border text-muted ms-auto" id="btn-reset-occ">Reset</button>
+          </div>
+        </div>
+
+        <!-- Real-Time Dynamic Impact Preview -->
+        <div class="col-lg-6">
+          <div class="p-3 bg-light rounded border" id="live-preview-box">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="small fw-semibold text-uppercase text-muted">Live Impact Preview</span>
+              <span class="badge bg-secondary" id="preview-delta">No change</span>
+            </div>
+            <div class="row g-2 text-center">
+              <div class="col-4">
+                <div class="small text-muted">New Available</div>
+                <div class="fw-bold" id="preview-avail">{{ shelter.available_capacity }}</div>
+              </div>
+              <div class="col-4">
+                <div class="small text-muted">Safe Available</div>
+                <div class="fw-bold" id="preview-safe-avail">{{ shelter.safe_available_capacity }}</div>
+              </div>
+              <div class="col-4">
+                <div class="small text-muted">New Status</div>
+                <div class="fw-bold" id="preview-status">{{ shelter.capacity_status_label }} ({{ shelter.occupancy_pct }}%)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Occupancy History Log Table ───────────────────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-header bg-transparent py-3 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <h5 class="mb-0 fw-semibold"><i class="bi bi-clock-history me-1 text-primary"></i>Immutable Occupancy History Log</h5>
+      <span class="text-muted small">Every modification creates a permanent snapshot with timestamp, delta, and recorder attribution</span>
+    </div>
+    <div class="text-muted small">
+      Total Updates Recorded: <strong>{{ history|length }}</strong>
+    </div>
+  </div>
+
+  <div class="card-body p-0">
+    {% if history %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="history-log-table">
+        <thead class="table-light text-muted small text-uppercase">
+          <tr>
+            <th class="ps-4">Timestamp (UTC)</th>
+            <th class="text-end">Occupancy</th>
+            <th class="text-center">Load %</th>
+            <th class="text-center">Change (Delta)</th>
+            <th class="text-end">Available Space</th>
+            <th class="text-end">Safe Available</th>
+            <th class="text-center">Status Snapshot</th>
+            <th class="pe-4">Recorded By</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in history %}
+          <tr>
+            <td class="ps-4 text-nowrap">
+              <span class="fw-semibold text-dark">{{ h.formatted_time }}</span>
+            </td>
+
+            <td class="text-end fw-bold text-nowrap">
+              {{ h.occupancy }} <span class="text-muted small fw-normal">/ {{ shelter.max_capacity }}</span>
+            </td>
+
+            <td class="text-center">
+              <span class="badge bg-light text-dark border">
+                {{ h.occupancy_pct }}%
+              </span>
+            </td>
+
+            <td class="text-center text-nowrap">
+              {% if loop.index == history|length and h.delta == 0 %}
+                <span class="badge bg-light text-muted border">Initial</span>
+              {% elif h.delta > 0 %}
+                <span class="badge bg-success-subtle text-success border border-success-subtle">
+                  <i class="bi bi-arrow-up-short"></i>+{{ h.delta }}
+                </span>
+              {% elif h.delta < 0 %}
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle">
+                  <i class="bi bi-arrow-down-short"></i>{{ h.delta }}
+                </span>
+              {% else %}
+                <span class="badge bg-light text-muted border">&plusmn;0</span>
+              {% endif %}
+            </td>
+
+            <td class="text-end text-nowrap">
+              <span class="{% if h.available_capacity <= 0 %}text-danger fw-bold{% elif h.available_capacity < 50 %}text-warning fw-medium{% else %}text-success{% endif %}">
+                {{ h.available_capacity }}
+              </span>
+            </td>
+
+            <td class="text-end text-nowrap">
+              <span class="{% if h.safe_available_capacity <= 0 %}text-danger fw-bold{% elif h.safe_available_capacity < 50 %}text-warning fw-medium{% else %}text-info{% endif %}">
+                {{ h.safe_available_capacity }}
+              </span>
+            </td>
+
+            <td class="text-center text-nowrap">
+              <span class="cap-badge cap-badge-{{ h.capacity_status }}">
+                {{ h.capacity_status | capitalize }}
+              </span>
+            </td>
+
+            <td class="pe-4 text-nowrap">
+              {% if h.recorder %}
+                <i class="bi bi-person-circle me-1 text-muted"></i>
+                <span class="fw-medium">{{ h.recorder.full_name }}</span>
+                <span class="role-badge role-badge-{{ h.recorder.role }} ms-1">{{ h.recorder.role_label }}</span>
+              {% else %}
+                <span class="text-muted fst-italic">System</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="p-5 text-center text-muted">
+      <i class="bi bi-clock-history fs-1 mb-2 d-block"></i>
+      <p class="mb-0">No historical records logged for this shelter yet.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    const maxCap     = {{ shelter.max_capacity }};
+    const safeLimit  = {{ shelter.safe_limit }};
+    const safeCap    = {{ shelter.safe_capacity }};
+    const initialOcc = {{ shelter.current_occupancy }};
+    const thresholds = {
+      safe:     {{ thresholds.safe }},
+      moderate: {{ thresholds.moderate }},
+      high:     {{ thresholds.high }},
+      critical: {{ thresholds.critical }}
+    };
+
+    const input      = document.getElementById('occ-input-val');
+    const prevDelta  = document.getElementById('preview-delta');
+    const prevAvail  = document.getElementById('preview-avail');
+    const prevSafe   = document.getElementById('preview-safe-avail');
+    const prevStatus = document.getElementById('preview-status');
+    const resetBtn   = document.getElementById('btn-reset-occ');
+
+    function determineStatus(pct) {
+      if (pct > thresholds.critical) return { key: 'overcrowded', label: 'Overcrowded' };
+      if (pct > thresholds.high)     return { key: 'critical',    label: 'Critical' };
+      if (pct > thresholds.moderate) return { key: 'high',        label: 'High' };
+      if (pct > thresholds.safe)     return { key: 'moderate',    label: 'Moderate' };
+      return { key: 'safe', label: 'Safe' };
+    }
+
+    function updatePreview() {
+      if (!input) return;
+      let val = parseInt(input.value, 10);
+      if (isNaN(val) || val < 0) val = 0;
+
+      const delta     = val - initialOcc;
+      const avail     = maxCap - val;
+      const safeAvail = safeCap - val;
+      const pct       = maxCap > 0 ? ((val / maxCap) * 100).toFixed(1) : 0;
+      const statusObj = determineStatus(parseFloat(pct));
+
+      // Delta label
+      if (delta > 0) {
+        prevDelta.className = 'badge bg-success';
+        prevDelta.textContent = '+' + delta + ' people';
+      } else if (delta < 0) {
+        prevDelta.className = 'badge bg-primary';
+        prevDelta.textContent = delta + ' people';
+      } else {
+        prevDelta.className = 'badge bg-secondary';
+        prevDelta.textContent = 'No change';
+      }
+
+      // Available
+      prevAvail.textContent = avail;
+      prevAvail.className = 'fw-bold ' + (avail <= 0 ? 'text-danger' : (avail < 50 ? 'text-warning' : 'text-success'));
+
+      // Safe Available
+      prevSafe.textContent = safeAvail;
+      prevSafe.className = 'fw-bold ' + (safeAvail <= 0 ? 'text-danger' : (safeAvail < 50 ? 'text-warning' : 'text-info'));
+
+      // Status
+      prevStatus.textContent = statusObj.label + ' (' + pct + '%)';
+    }
+
+    if (input) {
+      input.addEventListener('input', updatePreview);
+    }
+
+    // Quick delta adjustment buttons
+    document.querySelectorAll('.quick-delta').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const delta = parseInt(this.getAttribute('data-delta'), 10);
+        let currentVal = parseInt(input.value, 10);
+        if (isNaN(currentVal)) currentVal = 0;
+        let nextVal = currentVal + delta;
+        if (nextVal < 0) nextVal = 0;
+        input.value = nextVal;
+        updatePreview();
+      });
+    });
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', function () {
+        input.value = initialOcc;
+        updatePreview();
+      });
+    }
+
+    // Confirm large reductions
+    const form = document.getElementById('occ-update-form');
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        const newVal = parseInt(input.value, 10);
+        if (isNaN(newVal) || newVal < 0) {
+          e.preventDefault();
+          alert('Please enter a valid non-negative number.');
+          return;
+        }
+        if ((initialOcc - newVal) > 50) {
+          if (!confirm('You are reducing occupancy by ' + (initialOcc - newVal) + ' people. Is this correct?')) {
+            e.preventDefault();
+            return;
+          }
+        }
+        const submitBtn = document.getElementById('btn-submit-occ');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving…';
+        }
+      });
+    }
+  })();
+</script>
+{% endblock %}

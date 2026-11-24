@@ -1,0 +1,919 @@
+{% extends "base.html" %}
+{% block title %}Recommendation Results — {% if req.id %}Request #{{ req.id }}{% else %}Simulation{% endif %}{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ── Recommendation Results Page ─────────────────────────────────────────── */
+
+/* ── Hero recommended card ──────────────────────────────────────────────── */
+.hero-recommend-card {
+  background: #0d1b2a;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.hero-top-bar {
+  background: rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.hero-rank-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #ffc107;
+  color: #1a0a00;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 5px 14px;
+  border-radius: 4px;
+  letter-spacing: 0.3px;
+}
+.hero-score-badge {
+  background: rgba(34, 197, 94, 0.15);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+  font-size: 1.3rem;
+  font-weight: 800;
+  padding: 5px 16px;
+  border-radius: 6px;
+}
+
+/* SVG score ring */
+.score-ring-wrap {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  flex-shrink: 0;
+}
+.score-ring-wrap svg { transform: rotate(-90deg); }
+.score-ring-bg   { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 10; }
+.score-ring-fill {
+  fill: none;
+  stroke-width: 10;
+  stroke-linecap: round;
+  stroke-dasharray: 251;
+  stroke-dashoffset: 251;
+  transition: stroke-dashoffset 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.score-ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.score-ring-label .ring-val  { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.score-ring-label .ring-sub  { font-size: 0.6rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+/* Reasons list */
+.reason-list { list-style: none; padding: 0; margin: 0; }
+.reason-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.875rem;
+  color: rgba(255,255,255,0.85);
+  line-height: 1.45;
+}
+.reason-list li:last-child { border-bottom: none; }
+.reason-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  margin-top: 1px;
+}
+.ri-capacity   { background: rgba(34,197,94,0.2);  color: #4ade80; }
+.ri-medical    { background: rgba(239,68,68,0.2);  color: #f87171; }
+.ri-wheelchair { background: rgba(59,130,246,0.2); color: #60a5fa; }
+.ri-distance   { background: rgba(251,191,36,0.2); color: #fbbf24; }
+.ri-prediction { background: rgba(167,139,250,0.2);color: #c4b5fd; }
+.ri-resource   { background: rgba(20,184,166,0.2); color: #2dd4bf; }
+.ri-facility   { background: rgba(249,115,22,0.2); color: #fb923c; }
+.ri-warning    { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+/* Score bar components */
+.score-component-row { margin-bottom: 14px; }
+.score-component-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+.score-component-label { font-size: 0.78rem; color: rgba(255,255,255,0.65); }
+.score-component-val   { font-size: 0.78rem; color: #fff; font-weight: 600; }
+.score-track {
+  height: 7px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.score-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1.2s cubic-bezier(0.22,1,0.36,1);
+}
+
+/* Prediction panel */
+.prediction-panel {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.estimate-label {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(167,139,250,0.2);
+  color: #c4b5fd;
+  border: 1px solid rgba(167,139,250,0.3);
+  text-transform: uppercase;
+  margin-right: 6px;
+}
+.risk-low      { background: rgba(34,197,94,0.15);  color: #4ade80;  border: 1px solid rgba(34,197,94,0.3); }
+.risk-moderate { background: rgba(251,191,36,0.15); color: #fbbf24;  border: 1px solid rgba(251,191,36,0.3); }
+.risk-high     { background: rgba(239,68,68,0.15);  color: #f87171;  border: 1px solid rgba(239,68,68,0.3); }
+.risk-critical { background: rgba(220,38,38,0.25);  color: #fca5a5;  border: 1px solid rgba(220,38,38,0.4); }
+
+.metric-pill {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px 14px;
+  text-align: center;
+  flex: 1;
+  min-width: 80px;
+}
+.metric-pill .mp-val  { font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1.1; }
+.metric-pill .mp-lbl  { font-size: 0.65rem; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+
+/* ── Eligible shelters table ─────────────────────────────────────────────── */
+.eligible-card {
+  border: 1px solid rgba(0,0,0,0.07);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+}
+.eligible-table th {
+  background: #f8fafc;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #64748b;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-bottom: 2px solid #e2e8f0;
+}
+.eligible-table td {
+  padding: 12px 14px;
+  vertical-align: middle;
+  border-bottom: 1px solid #f1f5f9;
+}
+.eligible-table tr:last-child td { border-bottom: none; }
+.eligible-table .top-row td { background: #f0fdf4; }
+
+.rank-badge-top  { background: #198754; color:#fff; font-weight:700; font-size:0.75rem; padding:3px 8px; border-radius:4px; }
+.rank-badge-rest { background:#f1f5f9; color:#475569; font-size:0.75rem; padding:3px 8px; border-radius:4px; }
+
+.fac-icon { width:22px; height:22px; border-radius:4px; display:inline-flex; align-items:center; justify-content:center; font-size:0.75rem; margin:1px; }
+.fac-on   { background:#eff6ff; color:#3b82f6; }
+.fac-off  { background:#f1f5f9; color:#94a3b8; }
+
+.comp-bar-mini { height:5px; border-radius:3px; background:#e2e8f0; overflow:hidden; width:80px; display:inline-block; }
+.comp-bar-fill { height:100%; border-radius:3px; }
+
+/* ── Rejection audit ─────────────────────────────────────────────────────── */
+.rej-card {
+  border: 1px solid #fee2e2;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.rej-header-row {
+  background: #fff5f5;
+  border-bottom: 2px solid #fecaca;
+}
+.rej-table th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #ef4444;
+  font-weight: 600;
+  padding: 10px 14px;
+}
+.rej-table td {
+  padding: 11px 14px;
+  vertical-align: top;
+  border-bottom: 1px solid #fff1f2;
+  font-size: 0.83rem;
+}
+.rej-table tr:last-child td { border-bottom: none; }
+
+.rej-cat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.cat-status     { background:#fef3c7; color:#92400e; border:1px solid #fde68a; }
+.cat-capacity   { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+.cat-safe_cap   { background:#fce7f3; color:#9d174d; border:1px solid #f9a8d4; }
+.cat-wheelchair { background:#ede9fe; color:#5b21b6; border:1px solid #ddd6fe; }
+.cat-medical    { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; }
+
+/* ── Disclaimer banner ───────────────────────────────────────────────────── */
+.disclaimer-banner {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #f59e0b;
+  border-radius: 6px;
+  padding: 14px 18px;
+}
+
+/* ── No result panel ─────────────────────────────────────────────────────── */
+.no-result-panel {
+  background: #1a0a0a;
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 6px;
+  padding: 40px 32px;
+  text-align: center;
+}
+
+/* ── Summary stats row ───────────────────────────────────────────────────── */
+.stat-pill {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 20px;
+  text-align: center;
+  flex: 1;
+  min-width: 100px;
+}
+.stat-pill .sp-val { font-size: 1.5rem; font-weight: 800; line-height: 1; }
+.stat-pill .sp-lbl { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── Breadcrumb ─────────────────────────────────────────────────────────── #}
+<nav aria-label="breadcrumb" class="mb-3 rec-page-animate">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{{ url_for('recommend.recommend_form') }}" class="text-decoration-none">Recommendation Engine</a></li>
+    {% if req.id %}
+      <li class="breadcrumb-item"><a href="{{ url_for('requests.request_detail', request_id=req.id) }}" class="text-decoration-none">Request #{{ req.id }}</a></li>
+    {% endif %}
+    <li class="breadcrumb-item active" aria-current="page">Results</li>
+  </ol>
+</nav>
+
+{# ── Mandatory Transparency Disclaimer ──────────────────────────────────── #}
+<div class="disclaimer-banner mb-4 rec-page-animate d-flex gap-3 align-items-start">
+  <i class="bi bi-exclamation-triangle-fill text-warning fs-5 mt-1 flex-shrink-0"></i>
+  <div>
+    <div class="fw-bold text-dark small mb-1">
+      Decision Support Notice · Predictions are Labelled <code>[ESTIMATE]</code>
+    </div>
+    <div class="small text-secondary">
+      {{ result.disclaimer }}
+      <strong class="text-dark">Recommendations are not guaranteed to be optimal.</strong>
+      Future overload risk figures are heuristic forecasts derived from recent arrival trends — they are not real-time guarantees. Field coordinators must verify on-ground conditions before physical dispatch.
+    </div>
+  </div>
+</div>
+
+{# ── Page header ─────────────────────────────────────────────────────────── #}
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4 rec-page-animate">
+  <div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      {% if is_simulation %}
+        <span class="badge bg-warning text-dark px-3 py-2 fs-6 rounded-pill">
+          <i class="bi bi-cpu me-1"></i>Simulation Evaluation
+        </span>
+      {% else %}
+        <span class="badge bg-primary px-3 py-2 fs-6 rounded-pill">Request #{{ req.id }}</span>
+        <span class="badge {{ req.status_badge_class }} rounded-pill">{{ req.status_label }}</span>
+      {% endif %}
+    </div>
+    <h1 class="page-title mb-1">
+      Recommendation — Group of {{ req.group_size }}
+      {% if req.location_name %} · {{ req.location_name }}{% endif %}
+    </h1>
+    <p class="text-muted small mb-0">
+      Origin: <strong>{{ req.latitude }}, {{ req.longitude }}</strong>
+      · Evaluated {{ result.total_evaluated }} candidate shelter(s)
+      · Weights: Distance {{ (result.weights_used.distance * 100)|round(0)|int }}%
+        / Capacity {{ (result.weights_used.capacity * 100)|round(0)|int }}%
+        / Facilities {{ (result.weights_used.facilities * 100)|round(0)|int }}%
+        / Resources {{ (result.weights_used.resources * 100)|round(0)|int }}%
+    </p>
+  </div>
+  <div class="d-flex gap-2 flex-shrink-0 flex-wrap">
+    {% if not is_simulation and req.id %}
+    <a href="{{ url_for('recommend.redistribute_for_request', request_id=req.id) }}" class="btn btn-outline-primary btn-sm fw-semibold">
+      <i class="bi bi-diagram-3 me-1"></i>Redistribute Group
+    </a>
+    {% endif %}
+    <a href="{{ url_for('recommend.recommend_form') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>New Evaluation
+    </a>
+    {% if req.id %}
+    <a href="{{ url_for('requests.request_detail', request_id=req.id) }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-eye me-1"></i>View Request
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Hard Requirements Bar ───────────────────────────────────────────────── #}
+<div class="card border-0 shadow-sm mb-4 rec-page-animate" style="border-radius:12px;overflow:hidden;">
+  <div class="card-body py-3 px-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <div>
+        <div class="small fw-semibold text-uppercase text-muted mb-2" style="letter-spacing:.5px;">
+          <i class="bi bi-shield-lock me-1 text-danger"></i>Hard Constraints Applied
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <span class="badge bg-light text-dark border px-3 py-2">
+            <i class="bi bi-people me-1 text-primary"></i>Group Size: {{ req.group_size }}
+          </span>
+
+          {% if req.has_disabled or req.accessibility_requirements %}
+            <span class="badge bg-danger text-white px-3 py-2">
+              <i class="bi bi-person-wheelchair me-1"></i>Wheelchair Access MANDATORY
+            </span>
+          {% else %}
+            <span class="badge bg-light text-muted border px-3 py-2">
+              <i class="bi bi-person-wheelchair me-1"></i>Standard Mobility Access
+            </span>
+          {% endif %}
+
+          {% if req.has_injured or req.injured_count > 0 or req.medical_requirements %}
+            <span class="badge bg-danger text-white px-3 py-2">
+              <i class="bi bi-hospital me-1"></i>Medical Facility MANDATORY
+              {% if req.injured_count > 0 %}({{ req.injured_count }} injured){% endif %}
+            </span>
+          {% else %}
+            <span class="badge bg-light text-muted border px-3 py-2">
+              <i class="bi bi-bandaid me-1"></i>Standard Medical
+            </span>
+          {% endif %}
+
+          {% if req.elderly_count > 0 %}
+            <span class="badge bg-warning-subtle text-warning-emphasis border px-3 py-2">
+              <i class="bi bi-person-walking me-1"></i>Elderly: {{ req.elderly_count }}
+            </span>
+          {% endif %}
+          {% if req.children_count > 0 %}
+            <span class="badge bg-info-subtle text-info-emphasis border px-3 py-2">
+              <i class="bi bi-person me-1"></i>Children: {{ req.children_count }}
+            </span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="d-flex gap-3 text-center flex-shrink-0">
+        <div class="stat-pill">
+          <div class="sp-val text-success">{{ result.total_eligible }}</div>
+          <div class="sp-lbl">Eligible</div>
+        </div>
+        <div class="stat-pill">
+          <div class="sp-val text-danger">{{ result.total_rejected }}</div>
+          <div class="sp-lbl">Excluded</div>
+        </div>
+        <div class="stat-pill">
+          <div class="sp-val text-muted">{{ result.total_evaluated }}</div>
+          <div class="sp-lbl">Evaluated</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   RECOMMENDED SHELTER HERO PANEL
+══════════════════════════════════════════════════════════════════════════════ #}
+{% if result.recommended_shelter %}
+  {% set top = result.recommended_shelter %}
+  {% set sh  = top.shelter %}
+  {% set fac = sh.facility %}
+  {% set res = sh.resource %}
+  {% set pred = top.prediction %}
+
+  {# compute SVG ring offset: circumference=251.2, 0% → offset=251, 100% → offset=0 #}
+  {% set ring_offset = (251 * (1 - top.total_score / 100)) | round(1) %}
+
+  <div class="hero-recommend-card mb-4 rec-page-animate">
+
+    {# ── Top bar ─ #}
+    <div class="hero-top-bar">
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <span class="hero-rank-badge">
+          <i class="bi bi-trophy-fill"></i> Recommended Shelter (#1 Rank)
+        </span>
+        <span class="text-white-50 small">Best multi-criteria match — all hard constraints satisfied</span>
+      </div>
+      <span class="hero-score-badge">{{ top.total_score }} / 100</span>
+    </div>
+
+    {# ── Main body ─ #}
+    <div class="p-4">
+      <div class="row g-4">
+
+        {# ── Left: Name + Reasons ─ #}
+        <div class="col-lg-7">
+
+          <div class="d-flex align-items-start justify-content-between mb-3">
+            <div>
+              <h2 class="fw-bold text-white mb-1" style="font-size:1.45rem;">{{ sh.name }}</h2>
+              <div class="text-white-50 small">
+                <i class="bi bi-geo-alt me-1 text-warning"></i>{{ sh.address }}
+              </div>
+            </div>
+            <span class="badge {{ sh.capacity_badge_class }} px-3 py-2">{{ sh.capacity_status_label }}</span>
+          </div>
+
+          {# ── Positive Reasons ─ #}
+          <div class="mb-3">
+            <div class="text-white-50 small fw-semibold text-uppercase mb-2" style="letter-spacing:.6px;">
+              <i class="bi bi-check2-circle me-1 text-success"></i>Why this shelter is recommended:
+            </div>
+            <ul class="reason-list">
+              {% for reason in top.positive_reasons %}
+                {% set is_warn   = '⚠' in reason %}
+                {% set is_cap    = 'safe capacity' in reason.lower() or 'headroom' in reason.lower() %}
+                {% set is_med    = 'medical' in reason.lower() %}
+                {% set is_wc     = 'wheelchair' in reason.lower() %}
+                {% set is_dist   = 'km' in reason.lower() and ('proximity' in reason.lower() or 'close' in reason.lower() or 'distance' in reason.lower()) %}
+                {% set is_pred   = '[ESTIMATE]' in reason %}
+                {% set is_res    = 'bed' in reason.lower() or 'food' in reason.lower() or 'water' in reason.lower() or 'meal' in reason.lower() or 'resource' in reason.lower() %}
+                {% set is_fac    = 'family' in reason.lower() or 'kitchen' in reason.lower() or 'elderly' in reason.lower() or 'electricity' in reason.lower() or 'water supply' in reason.lower() %}
+                <li>
+                  {% if is_warn %}
+                    <span class="reason-icon ri-warning"><i class="bi bi-exclamation-triangle-fill"></i></span>
+                  {% elif is_cap %}
+                    <span class="reason-icon ri-capacity"><i class="bi bi-pie-chart-fill"></i></span>
+                  {% elif is_med %}
+                    <span class="reason-icon ri-medical"><i class="bi bi-hospital-fill"></i></span>
+                  {% elif is_wc %}
+                    <span class="reason-icon ri-wheelchair"><i class="bi bi-person-wheelchair"></i></span>
+                  {% elif is_dist %}
+                    <span class="reason-icon ri-distance"><i class="bi bi-geo-alt-fill"></i></span>
+                  {% elif is_pred %}
+                    <span class="reason-icon ri-prediction"><i class="bi bi-graph-up-arrow"></i></span>
+                  {% elif is_res %}
+                    <span class="reason-icon ri-resource"><i class="bi bi-box-seam-fill"></i></span>
+                  {% elif is_fac %}
+                    <span class="reason-icon ri-facility"><i class="bi bi-building-fill"></i></span>
+                  {% else %}
+                    <span class="reason-icon ri-facility"><i class="bi bi-check-circle-fill"></i></span>
+                  {% endif %}
+                  <span>{{ reason }}</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          {# ── Prediction Panel ─ #}
+          <div class="prediction-panel">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <span class="estimate-label">ESTIMATE</span>
+                <span class="text-white-50 small fw-semibold">Future Occupancy Forecast</span>
+              </div>
+              <span class="rej-cat-badge {% if pred.overload_risk == 'low' %}risk-low{% elif pred.overload_risk == 'moderate' %}risk-moderate{% elif pred.overload_risk == 'high' %}risk-high{% else %}risk-critical{% endif %}" style="border-radius:20px;">
+                {{ pred.risk_label }}
+              </span>
+            </div>
+            {% if pred.has_prediction %}
+              <div class="small mb-1" style="color:rgba(255,255,255,0.65);">{{ pred.summary }}</div>
+            {% else %}
+              <div class="small mb-1" style="color:rgba(255,255,255,0.65);">No occupancy trend history available — baseline load used.</div>
+            {% endif %}
+            <div style="font-size:0.7rem;color:rgba(255,255,255,0.35);">
+              <i class="bi bi-clock-history me-1"></i>{{ pred.disclaimer }}
+            </div>
+          </div>
+
+        </div>
+
+        {# ── Right: Score Ring + Metrics + Score Bars ─ #}
+        <div class="col-lg-5">
+
+          {# Score ring + metric pills #}
+          <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+
+            {# SVG Ring #}
+            <div class="score-ring-wrap" id="scoreRingWrap" data-offset="{{ ring_offset }}">
+              <svg viewBox="0 0 90 90" width="110" height="110">
+                <circle class="score-ring-bg" cx="45" cy="45" r="40"/>
+                <circle class="score-ring-fill"
+                        id="scoreRingFill"
+                        cx="45" cy="45" r="40"
+                        stroke="{% if top.total_score >= 75 %}#4ade80{% elif top.total_score >= 50 %}#fbbf24{% else %}#f87171{% endif %}"/>
+              </svg>
+              <div class="score-ring-label">
+                <span class="ring-val">{{ top.total_score }}</span>
+                <span class="ring-sub">/ 100</span>
+              </div>
+            </div>
+
+            {# Metric pills #}
+            <div class="d-flex gap-2 flex-wrap flex-1">
+              <div class="metric-pill">
+                <div class="mp-val text-warning">{{ top.distance_km }} <span style="font-size:.7rem;color:rgba(255,255,255,.45);">km</span></div>
+                <div class="mp-lbl">Distance</div>
+              </div>
+              <div class="metric-pill">
+                <div class="mp-val text-success">{{ sh.safe_available_capacity }}</div>
+                <div class="mp-lbl">Safe Spots</div>
+              </div>
+              <div class="metric-pill">
+                <div class="mp-val {% if sh.occupancy_pct > 85 %}text-danger{% elif sh.occupancy_pct > 60 %}text-warning{% else %}text-success{% endif %}">{{ sh.occupancy_pct }}%</div>
+                <div class="mp-lbl">Occupancy</div>
+              </div>
+              {% if res %}
+              <div class="metric-pill">
+                <div class="mp-val text-info">{{ res.beds_available }}</div>
+                <div class="mp-lbl">Beds Free</div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          {# Score Component Bars #}
+          <div class="mb-3">
+            <div class="text-white-50 small fw-semibold text-uppercase mb-3" style="letter-spacing:.5px;">
+              Score Breakdown (weighted)
+            </div>
+
+            <div class="score-component-row">
+              <div class="score-component-header">
+                <span class="score-component-label"><i class="bi bi-geo-alt me-1" style="color:#fbbf24;"></i>Distance Proximity <span class="text-muted">({{ (result.weights_used.distance * 100)|round(0)|int }}%)</span></span>
+                <span class="score-component-val">{{ top.score_components.distance.raw_score }} <span class="text-muted" style="font-size:.7rem;font-weight:400;">&nbsp;+{{ top.score_components.distance.weighted_contribution }}</span></span>
+              </div>
+              <div class="score-track">
+                <div class="score-bar" data-score-width="{{ top.score_components.distance.raw_score }}" style="background: #f59e0b;"></div>
+              </div>
+            </div>
+
+            <div class="score-component-row">
+              <div class="score-component-header">
+                <span class="score-component-label"><i class="bi bi-pie-chart me-1" style="color:#4ade80;"></i>Safe Capacity Headroom <span class="text-muted">({{ (result.weights_used.capacity * 100)|round(0)|int }}%)</span></span>
+                <span class="score-component-val">{{ top.score_components.capacity.raw_score }} <span class="text-muted" style="font-size:.7rem;font-weight:400;">&nbsp;+{{ top.score_components.capacity.weighted_contribution }}</span></span>
+              </div>
+              <div class="score-track">
+                <div class="score-bar" data-score-width="{{ top.score_components.capacity.raw_score }}" style="background: #16a34a;"></div>
+              </div>
+            </div>
+
+            <div class="score-component-row">
+              <div class="score-component-header">
+                <span class="score-component-label"><i class="bi bi-hospital me-1" style="color:#60a5fa;"></i>Facilities &amp; Amenities <span class="text-muted">({{ (result.weights_used.facilities * 100)|round(0)|int }}%)</span></span>
+                <span class="score-component-val">{{ top.score_components.facilities.raw_score }} <span class="text-muted" style="font-size:.7rem;font-weight:400;">&nbsp;+{{ top.score_components.facilities.weighted_contribution }}</span></span>
+              </div>
+              <div class="score-track">
+                <div class="score-bar" data-score-width="{{ top.score_components.facilities.raw_score }}" style="background: #0d6efd;"></div>
+              </div>
+            </div>
+
+            <div class="score-component-row" style="margin-bottom:0;">
+              <div class="score-component-header">
+                <span class="score-component-label"><i class="bi bi-box-seam me-1" style="color:#2dd4bf;"></i>Resource Reserves <span class="text-muted">({{ (result.weights_used.resources * 100)|round(0)|int }}%)</span></span>
+                <span class="score-component-val">{{ top.score_components.resources.raw_score }} <span class="text-muted" style="font-size:.7rem;font-weight:400;">&nbsp;+{{ top.score_components.resources.weighted_contribution }}</span></span>
+              </div>
+              <div class="score-track">
+                <div class="score-bar" data-score-width="{{ top.score_components.resources.raw_score }}" style="background: #0f766e;"></div>
+              </div>
+            </div>
+          </div>
+
+          {# Facility chips #}
+          {% if fac %}
+          <div class="mb-3">
+            <div class="text-white-50 small fw-semibold text-uppercase mb-2" style="letter-spacing:.5px;">Facility Profile</div>
+            <div class="d-flex flex-wrap gap-1">
+              <span class="fac-icon {{ 'fac-on' if fac.has_medical_support  else 'fac-off' }}" title="Medical Support">   <i class="bi bi-hospital-fill"></i></span>
+              <span class="fac-icon {{ 'fac-on' if fac.has_wheelchair_access else 'fac-off' }}" title="Wheelchair Access">  <i class="bi bi-person-wheelchair"></i></span>
+              <span class="fac-icon {{ 'fac-on' if fac.has_electricity        else 'fac-off' }}" title="Electricity">        <i class="bi bi-lightning-charge-fill"></i></span>
+              <span class="fac-icon {{ 'fac-on' if fac.has_running_water      else 'fac-off' }}" title="Running Water">      <i class="bi bi-droplet-fill"></i></span>
+              <span class="fac-icon {{ 'fac-on' if fac.has_toilets            else 'fac-off' }}" title="Toilets">            <i class="bi bi-door-closed-fill"></i></span>
+              <span class="fac-icon {{ 'fac-on' if fac.has_food               else 'fac-off' }}" title="Food">               <i class="bi bi-egg-fried"></i></span>
+              <span class="fac-icon {{ 'fac-on' if fac.has_kitchen            else 'fac-off' }}" title="Kitchen">            <i class="bi bi-house-door-fill"></i></span>
+              <span class="fac-icon {{ 'fac-on' if fac.has_family_area        else 'fac-off' }}" title="Family Area">        <i class="bi bi-people-fill"></i></span>
+            </div>
+          </div>
+          {% endif %}
+
+          <div class="d-flex flex-column gap-2 mt-3">
+            {% if not is_simulation and req.id and req.status == 'pending' %}
+              {% if sh.safe_available_capacity >= req.group_size %}
+                <form action="{{ url_for('recommend.confirm_single_allocation', request_id=req.id) }}" method="POST" onsubmit="return confirm('Confirm placement of {{ req.group_size }} evacuees to {{ sh.name }}? This will update occupancy immediately.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                  <input type="hidden" name="shelter_id" value="{{ sh.id }}">
+                  <input type="hidden" name="notes" value="Direct allocation confirmed from Recommendation Engine">
+                  <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm" style="border-radius:8px;padding:9px 16px;">
+                    <i class="bi bi-check-circle-fill me-2"></i>Confirm Placement ({{ req.group_size }} Evacuees)
+                  </button>
+                </form>
+              {% else %}
+                <button type="button" class="btn btn-secondary w-100" disabled style="border-radius:8px;padding:9px 16px;">
+                  <i class="bi bi-shield-exclamation me-1"></i>Exceeds Safe Capacity ({{ sh.safe_available_capacity }} available)
+                </button>
+              {% endif %}
+            {% elif req.status == 'allocated' %}
+              <div class="alert alert-success py-2 px-3 mb-0 text-center small fw-semibold" style="border-radius:8px;">
+                <i class="bi bi-check-all me-1"></i>Request is Already Allocated
+              </div>
+            {% endif %}
+
+            <a href="{{ url_for('shelters.shelter_detail', shelter_id=sh.id) }}" class="btn btn-sm text-center" style="background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.15);border-radius:8px;">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Inspect Full Shelter Profile
+            </a>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+{% else %}
+  {# ── No eligible shelters ─ #}
+  <div class="no-result-panel mb-4 rec-page-animate">
+    <i class="bi bi-exclamation-octagon-fill text-danger fs-1 mb-3 d-block"></i>
+    <h3 class="text-white fw-bold mb-2">No Single Shelter Can Fit Group ({{ req.group_size }} Evacuees)</h3>
+    <p class="text-white-50 mb-3 mx-auto" style="max-width:540px;">
+      No individual shelter has enough safe planning capacity to hold this entire group of {{ req.group_size }}.
+      Use the <strong>Redistribution Engine</strong> to partition the evacuees across multiple eligible shelters safely.
+    </p>
+    <div class="d-flex justify-content-center gap-2 flex-wrap">
+      {% if not is_simulation and req.id %}
+        <a href="{{ url_for('recommend.redistribute_for_request', request_id=req.id) }}" class="btn btn-success btn-sm px-4 py-2 fw-bold">
+          <i class="bi bi-diagram-3 me-1"></i>Run Multi-Shelter Redistribution
+        </a>
+      {% endif %}
+      <a href="{{ url_for('recommend.recommend_form') }}" class="btn btn-outline-light btn-sm px-3 py-2">
+        <i class="bi bi-arrow-left me-1"></i>Return to Engine
+      </a>
+    </div>
+  </div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   ALL ELIGIBLE SHELTERS — RANKED TABLE
+══════════════════════════════════════════════════════════════════════════════ #}
+{% if result.eligible_shelters %}
+<div class="eligible-card mb-4 rec-page-animate">
+  <div class="d-flex align-items-center justify-content-between px-4 py-3 border-bottom" style="background:#f8fafc;">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-list-ol text-primary fs-5"></i>
+      <h5 class="mb-0 fw-semibold text-dark">All Eligible Shelters — Ranked ({{ result.eligible_shelters|length }})</h5>
+    </div>
+    <span class="small text-muted">Ranked by weighted multi-criteria score · Distance as tiebreaker</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table eligible-table mb-0">
+      <thead>
+        <tr>
+          <th style="width:70px;">Rank</th>
+          <th>Shelter</th>
+          <th>Distance</th>
+          <th>Safe Capacity</th>
+          <th>Facilities</th>
+          <th><span class="estimate-label" style="font-size:.65rem;">ESTIMATE</span>Forecast</th>
+          <th style="width:170px;">Score (0–100)</th>
+          <th class="text-end pe-4"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cand in result.eligible_shelters %}
+          {% set csh = cand.shelter %}
+          {% set cfac = csh.facility %}
+          <tr class="{{ 'top-row' if cand.rank == 1 else '' }}">
+            <td>
+              {% if cand.rank == 1 %}
+                <span class="rank-badge-top"><i class="bi bi-star-fill me-1"></i>#1</span>
+              {% else %}
+                <span class="rank-badge-rest">#{{ cand.rank }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="fw-semibold text-dark small">{{ csh.name }}</div>
+              <div class="text-muted" style="font-size:.75rem;">{{ csh.address }}</div>
+            </td>
+            <td>
+              <span class="badge bg-light text-dark border small">
+                <i class="bi bi-geo-alt text-danger me-1"></i>{{ cand.distance_km }} km
+              </span>
+            </td>
+            <td>
+              <div class="fw-semibold small text-dark">{{ csh.safe_available_capacity }} safe spots</div>
+              <div class="text-muted" style="font-size:.72rem;">{{ csh.current_occupancy }}/{{ csh.max_capacity }} ({{ csh.occupancy_pct }}%)</div>
+            </td>
+            <td>
+              {% if cfac %}
+              <div class="d-flex flex-wrap gap-1">
+                <span class="fac-icon {{ 'fac-on' if cfac.has_medical_support  else 'fac-off' }}" title="Medical">    <i class="bi bi-hospital-fill" style="font-size:.65rem;"></i></span>
+                <span class="fac-icon {{ 'fac-on' if cfac.has_wheelchair_access else 'fac-off' }}" title="Wheelchair"><i class="bi bi-person-wheelchair" style="font-size:.65rem;"></i></span>
+                <span class="fac-icon {{ 'fac-on' if cfac.has_electricity        else 'fac-off' }}" title="Power">    <i class="bi bi-lightning-charge-fill" style="font-size:.65rem;"></i></span>
+                <span class="fac-icon {{ 'fac-on' if cfac.has_food               else 'fac-off' }}" title="Food">     <i class="bi bi-egg-fried" style="font-size:.65rem;"></i></span>
+                <span class="fac-icon {{ 'fac-on' if cfac.has_family_area        else 'fac-off' }}" title="Family Area"><i class="bi bi-people-fill" style="font-size:.65rem;"></i></span>
+              </div>
+              {% endif %}
+            </td>
+            <td>
+              {% set prisk = cand.prediction.overload_risk %}
+              <span class="rej-cat-badge
+                {% if prisk == 'low' %}risk-low
+                {% elif prisk == 'moderate' %}risk-moderate
+                {% elif prisk == 'high' %}risk-high
+                {% else %}risk-critical{% endif %}" style="border-radius:20px;font-size:.68rem;">
+                {{ prisk|title }} Risk
+              </span>
+            </td>
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold text-dark" style="font-size:.95rem;min-width:38px;">{{ cand.total_score }}</span>
+                <div style="flex:1;">
+                  {# 4 tiny stacked bars #}
+                  <div class="comp-bar-mini mb-1">
+                    <div class="comp-bar-fill" data-score-width="{{ cand.score_components.distance.raw_score }}" style="background:#f59e0b;"></div>
+                  </div>
+                  <div class="comp-bar-mini mb-1">
+                    <div class="comp-bar-fill" data-score-width="{{ cand.score_components.capacity.raw_score }}" style="background:#16a34a;"></div>
+                  </div>
+                  <div class="comp-bar-mini mb-1">
+                    <div class="comp-bar-fill" data-score-width="{{ cand.score_components.facilities.raw_score }}" style="background:#3b82f6;"></div>
+                  </div>
+                  <div class="comp-bar-mini">
+                    <div class="comp-bar-fill" data-score-width="{{ cand.score_components.resources.raw_score }}" style="background:#0f766e;"></div>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <td class="text-end pe-4">
+              <div class="d-flex align-items-center justify-content-end gap-1">
+                {% if not is_simulation and req.id and req.status == 'pending' and csh.safe_available_capacity >= req.group_size %}
+                  <form action="{{ url_for('recommend.confirm_single_allocation', request_id=req.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Place {{ req.group_size }} evacuees into {{ csh.name }}?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <input type="hidden" name="shelter_id" value="{{ csh.id }}">
+                    <input type="hidden" name="notes" value="Direct allocation confirmed from table selection">
+                    <button type="submit" class="btn btn-outline-success btn-sm py-1 px-2" title="Allocate full group here">
+                      <i class="bi bi-check-lg me-1"></i>Allocate
+                    </button>
+                  </form>
+                {% endif %}
+                <a href="{{ url_for('shelters.shelter_detail', shelter_id=csh.id) }}" class="btn btn-outline-secondary btn-sm" title="View shelter detail">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════════════════════
+   EXCLUDED / REJECTED SHELTERS — AUDIT TABLE
+══════════════════════════════════════════════════════════════════════════════ #}
+<div class="rej-card mb-4 rec-page-animate">
+  <div class="rej-header-row d-flex align-items-center justify-content-between px-4 py-3">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-shield-x text-danger fs-5"></i>
+      <h5 class="mb-0 fw-semibold text-dark">Excluded / Rejected Shelters ({{ result.rejected_shelters|length }})</h5>
+    </div>
+    <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-3 py-2">
+      Hard Constraint Audit — Transparent Exclusion Log
+    </span>
+  </div>
+
+  <div class="px-4 py-3 border-bottom" style="background:#fffbfb;">
+    <p class="small text-muted mb-2">
+      In compliance with emergency management safety standards, any shelter failing <strong>one or more hard constraints</strong>
+      is <strong>strictly excluded</strong> — not given a lower score. The constraints evaluated are:
+    </p>
+    <div class="d-flex flex-wrap gap-2">
+      <span class="rej-cat-badge cat-status">  <i class="bi bi-x-circle me-1"></i>Operational Status</span>
+      <span class="rej-cat-badge cat-capacity"> <i class="bi bi-people me-1"></i>Physical Capacity</span>
+      <span class="rej-cat-badge cat-safe_cap"> <i class="bi bi-shield me-1"></i>Safe Planning Capacity</span>
+      <span class="rej-cat-badge cat-wheelchair"><i class="bi bi-person-wheelchair me-1"></i>Wheelchair Accessibility</span>
+      <span class="rej-cat-badge cat-medical">  <i class="bi bi-hospital me-1"></i>Medical Facility</span>
+    </div>
+  </div>
+
+  {% if result.rejected_shelters %}
+    <div class="table-responsive">
+      <table class="table rej-table mb-0">
+        <thead>
+          <tr>
+            <th style="width:110px;">Status</th>
+            <th style="width:220px;">Shelter</th>
+            <th style="width:160px;">Capacity State</th>
+            <th>Specific Exclusion Reason(s)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rej in result.rejected_shelters %}
+            {% set rsh = rej.shelter %}
+            <tr>
+              <td>
+                <span class="badge bg-danger text-white px-2 py-2">
+                  <i class="bi bi-x-circle me-1"></i>NOT ELIGIBLE
+                </span>
+              </td>
+              <td>
+                <div class="fw-semibold text-dark small">{{ rsh.name }}</div>
+                <div class="text-muted" style="font-size:.73rem;">{{ rsh.address }}</div>
+                <div class="mt-1">
+                  <span class="badge bg-light text-secondary border" style="font-size:.67rem;">{{ rsh.status_label }}</span>
+                </div>
+              </td>
+              <td>
+                <span class="badge {{ rsh.capacity_badge_class }} mb-1">{{ rsh.capacity_status_label }}</span>
+                <div class="text-muted" style="font-size:.72rem;">{{ rsh.current_occupancy }} / {{ rsh.max_capacity }} ({{ rsh.occupancy_pct }}%)</div>
+              </td>
+              <td>
+                {# Use rejection_details if available (new engine), fallback to rejection_reasons #}
+                {% if rej.rejection_details %}
+                  {% for detail in rej.rejection_details %}
+                    <div class="d-flex align-items-start gap-2 mb-2">
+                      <span class="rej-cat-badge cat-{{ detail.category }} flex-shrink-0 mt-1">
+                        {% if detail.category == 'status' %}<i class="bi bi-x-circle me-1"></i>Status
+                        {% elif detail.category == 'capacity' %}<i class="bi bi-people me-1"></i>Capacity
+                        {% elif detail.category == 'safe_cap' %}<i class="bi bi-shield me-1"></i>Safe Cap
+                        {% elif detail.category == 'wheelchair' %}<i class="bi bi-person-wheelchair me-1"></i>Accessibility
+                        {% elif detail.category == 'medical' %}<i class="bi bi-hospital me-1"></i>Medical
+                        {% else %}<i class="bi bi-x me-1"></i>Constraint
+                        {% endif %}
+                      </span>
+                      <span class="text-danger fw-semibold">{{ detail.reason }}</span>
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  {% for reason in rej.rejection_reasons %}
+                    <div class="text-danger fw-semibold small mb-1">
+                      <i class="bi bi-x-circle-fill me-1"></i>{{ reason }}
+                    </div>
+                  {% endfor %}
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-check2-circle text-success fs-2 d-block mb-2"></i>
+      <div class="fw-semibold">No shelters were excluded.</div>
+      <div class="small">All available shelters met every hard constraint for this request.</div>
+    </div>
+  {% endif %}
+</div>
+
+{# ── Score Ring & Score Bars render script ─ #}
+<script>
+(function() {
+  // Score Ring setup
+  const wrap = document.getElementById('scoreRingWrap');
+  const fill = document.getElementById('scoreRingFill');
+  if (wrap && fill) {
+    fill.style.strokeDashoffset = parseFloat(wrap.dataset.offset || '251');
+  }
+
+  // Score Bars and Mini Bars immediate width assignment
+  document.querySelectorAll('[data-score-width]').forEach(function(bar) {
+    const raw = parseFloat(bar.getAttribute('data-score-width')) || 0;
+    bar.style.width = Math.min(100, Math.max(0, raw)) + '%';
+  });
+})();
+</script>
+
+{% endblock %}

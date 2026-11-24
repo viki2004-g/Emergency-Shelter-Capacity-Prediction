@@ -1,0 +1,815 @@
+{% extends "base.html" %}
+{% block title %}Emergency Operations Dashboard{% endblock %}
+
+{% block head_extra %}
+{# Load Chart.js from CDN #}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+/* ── EOC Mission-Critical Dashboard Styles ────────────────────────────────── */
+.eoc-header-strip {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.eoc-stat-box {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.eoc-stat-box .stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  margin-bottom: 6px;
+}
+.eoc-stat-box .stat-number {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--color-text);
+  font-feature-settings: "tnum";
+}
+.eoc-stat-box .stat-sub {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+}
+
+/* Alert Banner */
+.eoc-alert-box {
+  border-left: 4px solid var(--color-critical);
+  background: #fff5f5;
+  border-radius: 6px;
+  border-top: 1px solid #fed7d7;
+  border-right: 1px solid #fed7d7;
+  border-bottom: 1px solid #fed7d7;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+
+/* Charts Containers */
+.eoc-chart-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  height: 100%;
+}
+.eoc-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 10px;
+}
+.eoc-chart-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0;
+}
+
+/* Shelter Status Table */
+.eoc-table-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.eoc-table-header {
+  background: #f8fafc;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* Filter buttons */
+.filter-btn-group .btn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 4px;
+}
+
+/* Badges */
+.status-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.pill-critical    { background: #fee2e2; color: #991b1b; }
+.pill-high        { background: #fef3c7; color: #92400e; }
+.pill-moderate    { background: #fef9c3; color: #854d0e; }
+.pill-safe        { background: #dcfce7; color: #166534; }
+.pill-overcrowded { background: #7f1d1d; color: #ffffff; }
+
+/* Activity table rows */
+.feed-item {
+  border-bottom: 1px solid #f1f5f9;
+  padding: 10px 14px;
+  font-size: 0.83rem;
+}
+.feed-item:last-child {
+  border-bottom: none;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── 1. Incident Command Top Bar ─────────────────────────────────────────── #}
+<div class="eoc-header-strip d-flex flex-wrap align-items-center justify-content-between gap-3">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge bg-dark text-white px-2 py-1" style="font-size:0.75rem;letter-spacing:0.04em;">EOC COMMAND</span>
+      <span class="status-pill {% if d.global_network_status == 'critical' %}pill-critical{% elif d.global_network_status == 'high' %}pill-high{% elif d.global_network_status == 'moderate' %}pill-moderate{% else %}pill-safe{% endif %}">
+        {{ d.global_status_label }}
+      </span>
+      <span class="text-muted small ms-2">
+        <i class="bi bi-clock me-1"></i>Updated: <strong>{{ d.last_updated }}</strong>
+      </span>
+    </div>
+    <h1 class="h4 mb-0 fw-bold text-dark">Emergency Shelter Operations &amp; Capacity Command</h1>
+    <p class="text-muted small mb-0 mt-1">
+      Decision-support situational awareness for emergency response teams.
+      {% if d.is_admin %}Role: <strong>System Administrator</strong> (Full Control){% elif d.is_authority %}Role: <strong>Public Authority</strong> (Monitoring &amp; Policy){% elif d.is_manager %}Role: <strong>Shelter Manager</strong> ({{ d.my_shelters_count }} Assigned Facility){% elif d.is_responder %}Role: <strong>Emergency Responder</strong> (Tactical Placement){% else %}Role: <strong>Citizen / Public Safety View</strong>{% endif %}
+    </p>
+  </div>
+
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    {% if d.can_dispatch %}
+      <a href="{{ url_for('requests.new_request') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>New Evacuation Request
+      </a>
+      <a href="{{ url_for('recommend.recommend_form') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-compass me-1"></i>Recommendation Engine
+      </a>
+    {% endif %}
+    {% if current_user.can_operate() %}
+    <a href="{{ url_for('predict.prediction_dashboard') }}" class="btn btn-outline-secondary btn-sm" title="View 24h occupancy forecasting">
+      <i class="bi bi-graph-up me-1"></i>Forecasting Model
+    </a>
+    {% endif %}
+    {% if d.is_manager %}
+    <a href="{{ url_for('shelters.occupancy_overview') }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-speedometer me-1"></i>Occupancy Tracking
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+{# ── 2. Active Emergency Alerts & Warnings Callout ────────────────────────── #}
+{% if d.unresolved_alerts %}
+<div class="eoc-alert-box">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-exclamation-octagon-fill text-danger fs-5"></i>
+      <strong class="text-danger small text-uppercase" style="letter-spacing:0.05em;">
+        Active Emergency Warnings ({{ d.unresolved_alerts_count }} Active{% if d.unread_alerts_count > 0 %}, {{ d.unread_alerts_count }} Unread{% endif %})
+      </strong>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <a href="{{ url_for('alerts.list_alerts') }}" class="btn btn-outline-danger btn-sm py-0 px-2 fw-semibold" style="font-size:0.75rem;">
+        View All Alerts <i class="bi bi-arrow-right ms-1"></i>
+      </a>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-borderless mb-0 align-middle" style="font-size:0.82rem;">
+      <tbody>
+        {% for alert in d.unresolved_alerts[:4] %}
+        <tr class="border-bottom border-danger-subtle {% if not alert.is_read %}fw-semibold{% endif %}">
+          <td style="width:140px;">
+            <span class="badge {{ alert.severity_badge_class }} me-1" style="font-size:0.7rem;">
+              {{ alert.severity|upper }}
+            </span>
+            {% if not alert.is_read %}
+            <span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-50" style="font-size:0.65rem;">
+              NEW
+            </span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge bg-light text-dark border me-1" style="font-size:0.7rem;">{{ alert.type_label }}</span>
+            <strong>{{ alert.shelter.name if alert.shelter else 'System-Wide' }}</strong>:
+            {{ alert.message }}
+          </td>
+          <td class="text-muted text-end" style="width:110px;">
+            {{ alert.time_ago }}
+          </td>
+          <td class="text-end" style="width:160px;">
+            {% if not alert.is_read %}
+            <form action="{{ url_for('alerts.mark_read', alert_id=alert.id) }}" method="POST" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button type="submit" class="btn btn-outline-secondary btn-sm py-0 px-1" style="font-size:0.72rem;" title="Mark as Read">
+                <i class="bi bi-envelope-open"></i>
+              </button>
+            </form>
+            {% endif %}
+
+            {% if d.can_resolve_alerts %}
+              <form action="{{ url_for('alerts.resolve', alert_id=alert.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Mark alert #{{ alert.id }} as resolved?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size:0.75rem;">
+                  <i class="bi bi-check2 me-1"></i>Resolve
+                </button>
+              </form>
+            {% elif alert.shelter_id %}
+              <a href="{{ url_for('shelters.shelter_detail', shelter_id=alert.shelter_id) }}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.75rem;">
+                Inspect
+              </a>
+            {% endif %}
+
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+
+{# ── 3. Role-Aware Manager Highlight (If Shelter Manager) ─────────────────── #}
+{% if d.is_manager and d.my_shelters %}
+<div class="card mb-4 border-primary border-2">
+  <div class="card-header bg-primary-subtle py-2 px-3 d-flex align-items-center justify-content-between">
+    <span class="fw-bold text-primary-emphasis small">
+      <i class="bi bi-person-badge me-1"></i>Your Assigned Shelter Facility
+    </span>
+    <span class="badge bg-primary">{{ d.my_shelters_count }} Shelter Managed</span>
+  </div>
+  <div class="card-body p-3">
+    <div class="row g-3 align-items-center">
+      {% for m in d.my_shelters %}
+      <div class="col-md-4">
+        <h5 class="mb-1 fw-bold text-dark">{{ m.name }}</h5>
+        <div class="text-muted small"><i class="bi bi-geo-alt me-1"></i>{{ m.address }}</div>
+      </div>
+      <div class="col-md-5">
+        <div class="d-flex justify-content-between small text-muted mb-1">
+          <span>Occupancy: <strong>{{ m.current_occupancy }} / {{ m.max_capacity }}</strong> ({{ m.occupancy_pct }}%)</span>
+          <span>Safe Buffer: <strong>{{ m.safe_available_capacity }} spots</strong></span>
+        </div>
+        <div class="progress" style="height: 8px;">
+          <div class="progress-bar {% if m.occupancy_pct > 85 %}bg-danger{% elif m.occupancy_pct > 60 %}bg-warning{% else %}bg-success{% endif %}"
+               role="progressbar" style="width: {{ [m.occupancy_pct, 100]|min }}%;"></div>
+        </div>
+      </div>
+      <div class="col-md-3 text-end">
+        <a href="{{ url_for('shelters.shelter_occupancy', shelter_id=m.id) }}" class="btn btn-sm btn-primary">
+          <i class="bi bi-arrow-repeat me-1"></i>Update Occupancy Count
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── 4. Key Operational Summary Metrics Bar ──────────────────────────────── #}
+<div class="row g-3 mb-4">
+  {# Metric 1: Total Shelters #}
+  <div class="col-6 col-lg-2">
+    <div class="eoc-stat-box">
+      <div>
+        <div class="stat-label">Shelter Network</div>
+        <div class="stat-number text-primary">{{ d.active_shelters }} <span style="font-size:1rem;color:#64748b;">/ {{ d.total_shelters }}</span></div>
+      </div>
+      <div class="stat-sub">
+        <i class="bi bi-building me-1"></i>{{ d.active_shelters }} Operational Shelters
+      </div>
+    </div>
+  </div>
+
+  {# Metric 2: Network Occupancy #}
+  <div class="col-6 col-lg-2">
+    <div class="eoc-stat-box">
+      <div>
+        <div class="stat-label">Total Occupancy</div>
+        <div class="stat-number {% if d.global_occupancy_pct >= 85 %}text-danger{% elif d.global_occupancy_pct >= 60 %}text-warning{% else %}text-success{% endif %}">
+          {{ d.global_occupancy_pct }}%
+        </div>
+      </div>
+      <div class="stat-sub font-monospace">
+        {{ d.total_occupancy }} / {{ d.total_capacity }} Evacuees
+      </div>
+    </div>
+  </div>
+
+  {# Metric 3: Safe Available Headroom #}
+  <div class="col-6 col-lg-2">
+    <div class="eoc-stat-box">
+      <div>
+        <div class="stat-label">Safe Available</div>
+        <div class="stat-number text-success">{{ d.usable_safe_available }}</div>
+      </div>
+      <div class="stat-sub">
+        Safe planning buffer
+      </div>
+    </div>
+  </div>
+
+  {# Metric 4: Critical Shelters #}
+  <div class="col-6 col-lg-2">
+    <div class="eoc-stat-box {% if d.critical_shelters_count > 0 %}border-danger bg-danger-subtle{% endif %}">
+      <div>
+        <div class="stat-label text-danger">Critical / Overcrowded</div>
+        <div class="stat-number text-danger">{{ d.critical_shelters_count }}</div>
+      </div>
+      <div class="stat-sub">
+        {% if d.overcrowded_shelters_count > 0 %}
+          <strong>{{ d.overcrowded_shelters_count }}</strong> > 100% capacity
+        {% else %}
+          Safe limits breached
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Metric 5: Predicted Overloads #}
+  <div class="col-6 col-lg-2">
+    <div class="eoc-stat-box {% if d.predicted_overloads_count > 0 %}border-warning bg-warning-subtle{% endif %}">
+      <div>
+        <div class="stat-label text-warning-emphasis">6h Forecast Risk</div>
+        <div class="stat-number text-warning-emphasis">{{ d.predicted_overloads_count }}</div>
+      </div>
+      <div class="stat-sub">
+        <span class="badge bg-secondary" style="font-size:.65rem;">ESTIMATE</span> Inbound trend risk
+      </div>
+    </div>
+  </div>
+
+  {# Metric 6: Resource Shortages #}
+  <div class="col-6 col-lg-2">
+    <div class="eoc-stat-box {% if d.resource_shortages_count > 0 %}border-warning{% endif %}">
+      <div>
+        <div class="stat-label">Supply Shortages</div>
+        <div class="stat-number {% if d.resource_shortages_count > 0 %}text-warning-emphasis{% else %}text-muted{% endif %}">
+          {{ d.resource_shortages_count }}
+        </div>
+      </div>
+      <div class="stat-sub">
+        Shelters with low supplies
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── 5. Operational Analytics & Chart.js Visualizations ──────────────────── #}
+<div class="row g-3 mb-4">
+  {# Left Chart: Horizontal Shelter Load vs Capacity Thresholds #}
+  <div class="col-lg-8">
+    <div class="eoc-chart-card">
+      <div class="eoc-chart-header">
+        <div>
+          <h2 class="eoc-chart-title">Shelter Occupancy vs Safe Planning Limit</h2>
+          <div class="text-muted small">Real-time load compared against safe capacity and maximum physical limit</div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-success" style="font-size:0.7rem;">&lt; 60% Safe</span>
+          <span class="badge bg-warning text-dark" style="font-size:0.7rem;">60–85% Moderate</span>
+          <span class="badge bg-danger" style="font-size:0.7rem;">&gt; 85% Critical</span>
+        </div>
+      </div>
+      <div style="position: relative; height: 320px; width: 100%;">
+        <canvas id="shelterLoadChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  {# Right Chart: Network Capacity Breakdown (Doughnut) #}
+  <div class="col-lg-4">
+    <div class="eoc-chart-card">
+      <div class="eoc-chart-header">
+        <div>
+          <h2 class="eoc-chart-title">Capacity Utilization</h2>
+          <div class="text-muted small">Network partition of physical capacity</div>
+        </div>
+        <span class="status-pill {% if d.global_occupancy_pct >= 85 %}pill-critical{% elif d.global_occupancy_pct >= 60 %}pill-moderate{% else %}pill-safe{% endif %}">
+          {{ d.global_occupancy_pct }}%
+        </span>
+      </div>
+      <div style="position: relative; height: 240px; width: 100%;">
+        <canvas id="capacityDoughnutChart"></canvas>
+      </div>
+      <div class="row g-2 mt-2 pt-2 border-top text-center" style="font-size:0.78rem;">
+        <div class="col-4">
+          <div class="text-muted">Occupied</div>
+          <strong class="text-dark">{{ d.total_occupancy }}</strong>
+        </div>
+        <div class="col-4">
+          <div class="text-muted">Safe Headroom</div>
+          <strong class="text-success">{{ d.usable_safe_available }}</strong>
+        </div>
+        <div class="col-4">
+          <div class="text-muted">Surge Buffer</div>
+          <strong class="text-secondary">{{ d.total_capacity - d.total_safe_capacity }}</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── 6. Operational Shelter Grid (Filterable Table) ──────────────────────── #}
+<div class="eoc-table-card">
+  <div class="eoc-table-header">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-hospital text-primary"></i>
+      <h2 class="h6 mb-0 fw-bold text-dark">Operational Shelter Status Grid</h2>
+      <span class="badge bg-light text-dark border">{{ shelters|length }} Shown</span>
+    </div>
+
+    {# Filter Buttons #}
+    <div class="btn-group filter-btn-group" role="group" aria-label="Shelter grid filters">
+      <a href="{{ url_for('dashboard.dashboard', filter='all') }}"
+         class="btn {% if active_filter == 'all' %}btn-dark{% else %}btn-outline-secondary{% endif %}">
+        All Shelters ({{ d.total_shelters }})
+      </a>
+      <a href="{{ url_for('dashboard.dashboard', filter='critical') }}"
+         class="btn {% if active_filter == 'critical' %}btn-danger{% else %}btn-outline-danger{% endif %}">
+        Critical ({{ d.critical_shelters_count }})
+      </a>
+      <a href="{{ url_for('dashboard.dashboard', filter='overload_risk') }}"
+         class="btn {% if active_filter == 'overload_risk' %}btn-warning text-dark{% else %}btn-outline-warning text-dark{% endif %}">
+        Overload Risk ({{ d.predicted_overloads_count }})
+      </a>
+      <a href="{{ url_for('dashboard.dashboard', filter='shortage') }}"
+         class="btn {% if active_filter == 'shortage' %}btn-warning{% else %}btn-outline-secondary{% endif %}">
+        Supplies Low ({{ d.resource_shortages_count }})
+      </a>
+      {% if d.is_manager %}
+      <a href="{{ url_for('dashboard.dashboard', filter='my_shelters') }}"
+         class="btn {% if active_filter == 'my_shelters' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        My Shelter ({{ d.my_shelters_count }})
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:0.84rem;">
+      <thead class="table-light">
+        <tr>
+          <th>Shelter Name &amp; Location</th>
+          <th style="width:100px;">Status</th>
+          <th style="width:170px;">Physical Occupancy</th>
+          <th style="width:130px;">Safe Headroom</th>
+          <th style="width:130px;">Facilities</th>
+          <th style="width:140px;">Supply Reserves</th>
+          <th style="width:140px;"><span class="badge bg-secondary" style="font-size:.6rem;">ESTIMATE</span>6h Forecast</th>
+          <th class="text-end" style="width:140px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in shelters %}
+        {% set pct = s.occupancy_pct %}
+        <tr class="{% if pct > 100 %}table-danger{% elif pct >= 95 or s.safe_available_capacity <= 0 %}table-danger-subtle{% endif %}">
+          {# Name & Location #}
+          <td>
+            <div class="fw-bold text-dark">{{ s.name }}</div>
+            <div class="text-muted small" style="font-size:0.75rem;">
+              <i class="bi bi-geo-alt me-1"></i>{{ s.address }}
+            </div>
+          </td>
+
+          {# Status #}
+          <td>
+            <span class="badge {% if s.status == 'active' %}bg-success{% elif s.status == 'full' %}bg-danger{% else %}bg-secondary{% endif %}">
+              {{ s.status|upper }}
+            </span>
+          </td>
+
+          {# Physical Occupancy #}
+          <td>
+            <div class="d-flex justify-content-between small mb-1">
+              <span class="font-monospace fw-semibold">{{ s.current_occupancy }}/{{ s.max_capacity }}</span>
+              <span class="fw-bold {% if pct > 100 %}text-danger{% elif pct > 85 %}text-danger{% elif pct > 60 %}text-warning-emphasis{% else %}text-success{% endif %}">
+                {{ pct }}%
+              </span>
+            </div>
+            <div class="progress" style="height: 6px;">
+              <div class="progress-bar {% if pct > 100 %}bg-dark{% elif pct > 85 %}bg-danger{% elif pct > 60 %}bg-warning{% else %}bg-success{% endif %}"
+                   role="progressbar" style="width: {{ [pct, 100]|min }}%;"></div>
+            </div>
+          </td>
+
+          {# Safe Available Headroom #}
+          <td>
+            {% if s.safe_available_capacity > 0 %}
+              <div class="text-success fw-bold font-monospace">+{{ s.safe_available_capacity }} spots</div>
+              <div class="text-muted" style="font-size:0.7rem;">Limit: {{ s.safe_capacity }} ({{ s.safe_limit_pct }}%)</div>
+            {% else %}
+              <div class="text-danger fw-bold font-monospace">{{ s.safe_available_capacity }} deficit</div>
+              <div class="text-danger small" style="font-size:0.7rem;">Safe threshold breached</div>
+            {% endif %}
+          </td>
+
+          {# Facilities #}
+          <td>
+            {% if s.facility %}
+              <div class="d-flex gap-1">
+                <span class="badge {% if s.facility.has_medical_support %}bg-primary{% else %}bg-light text-muted border{% endif %}" title="Medical Support">
+                  <i class="bi bi-hospital"></i>
+                </span>
+                <span class="badge {% if s.facility.has_wheelchair_access %}bg-primary{% else %}bg-light text-muted border{% endif %}" title="Wheelchair Access">
+                  <i class="bi bi-person-wheelchair"></i>
+                </span>
+                <span class="badge {% if s.facility.has_electricity %}bg-primary{% else %}bg-light text-muted border{% endif %}" title="Electricity">
+                  <i class="bi bi-lightning-charge"></i>
+                </span>
+                <span class="badge {% if s.facility.has_food %}bg-primary{% else %}bg-light text-muted border{% endif %}" title="Food &amp; Kitchen">
+                  <i class="bi bi-egg-fried"></i>
+                </span>
+              </div>
+            {% else %}
+              <span class="text-muted small">—</span>
+            {% endif %}
+          </td>
+
+          {# Supply Reserves #}
+          <td>
+            {% if s.resource %}
+              {% if s.has_shortage %}
+                <span class="badge bg-warning text-dark">
+                  <i class="bi bi-exclamation-triangle me-1"></i>Low: {{ s.shortage_fields|join(', ')|replace('_', ' ') }}
+                </span>
+              {% else %}
+                <span class="text-success small"><i class="bi bi-check-circle me-1"></i>Adequate</span>
+              {% endif %}
+            {% else %}
+              <span class="text-muted small">Unstocked</span>
+            {% endif %}
+          </td>
+
+          {# Prediction #}
+          <td>
+            {% set prisk = s.prediction.overload_risk %}
+            <span class="status-pill {% if prisk == 'critical' %}pill-critical{% elif prisk == 'high' %}pill-high{% elif prisk == 'moderate' %}pill-moderate{% else %}pill-safe{% endif %}">
+              {{ prisk|upper }} RISK
+            </span>
+            {% if s.prediction.has_prediction %}
+              <div class="text-muted" style="font-size:0.7rem;">
+                Pred: {{ s.prediction.predicted_pct }}% in 6h
+              </div>
+            {% endif %}
+          </td>
+
+          {# Actions #}
+          <td class="text-end">
+            <div class="btn-group btn-group-sm">
+              <a href="{{ url_for('shelters.shelter_detail', shelter_id=s.id) }}" class="btn btn-outline-secondary btn-sm" title="View details">
+                <i class="bi bi-eye"></i>
+              </a>
+              {% if d.can_manage_shelter and (d.is_admin or s.managed_by == d.user.id) %}
+                <a href="{{ url_for('shelters.shelter_occupancy', shelter_id=s.id) }}" class="btn btn-outline-primary btn-sm" title="Update occupancy">
+                  <i class="bi bi-pencil-square"></i>
+                </a>
+              {% endif %}
+              {% if d.can_dispatch and s.safe_available_capacity > 0 %}
+                <a href="{{ url_for('recommend.recommend_form') }}" class="btn btn-outline-success btn-sm" title="Dispatch evacuees">
+                  <i class="bi bi-box-arrow-in-down-right"></i>
+                </a>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" class="text-center py-4 text-muted">
+            <i class="bi bi-info-circle me-1"></i>No shelters match the selected filter.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── 7. Recent Operational Feeds (Allocations & Requests) ────────────────── #}
+<div class="row g-3">
+  {# Recent Confirmed Allocations Feed #}
+  <div class="col-lg-6">
+    <div class="card h-100 border">
+      <div class="card-header bg-light d-flex align-items-center justify-content-between py-2 px-3">
+        <span class="fw-bold small text-dark">
+          <i class="bi bi-check2-all text-success me-1"></i>Recent Confirmed Allocations
+        </span>
+        <span class="badge bg-secondary small">{{ d.recent_allocations|length }} Recorded</span>
+      </div>
+      <div class="card-body p-0">
+        {% if d.recent_allocations %}
+          {% for a in d.recent_allocations %}
+          <div class="feed-item d-flex align-items-center justify-content-between">
+            <div>
+              <span class="fw-bold text-dark">Request #{{ a.request_id }}</span>
+              <i class="bi bi-arrow-right text-muted mx-1"></i>
+              <strong class="text-primary">{{ a.shelter.name }}</strong>
+              <div class="text-muted small" style="font-size:0.75rem;">
+                Confirmed by {{ a.confirmer.full_name if a.confirmer else 'System Dispatcher' }}
+                · {{ a.confirmed_at.strftime('%d %b %H:%M') if a.confirmed_at else '—' }} UTC
+              </div>
+            </div>
+            <div class="text-end">
+              <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1 fs-6 font-monospace">
+                +{{ a.allocated_count }} Evacuees
+              </span>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="p-4 text-center text-muted small">
+            <i class="bi bi-inbox fs-4 d-block mb-1"></i>No confirmed allocations recorded yet.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Recent Shelter Requests Feed #}
+  <div class="col-lg-6">
+    <div class="card h-100 border">
+      <div class="card-header bg-light d-flex align-items-center justify-content-between py-2 px-3">
+        <span class="fw-bold small text-dark">
+          <i class="bi bi-people text-primary me-1"></i>Recent Shelter Requests
+        </span>
+        <span class="badge bg-primary small">{{ d.pending_requests_count }} Pending Intake</span>
+      </div>
+      <div class="card-body p-0">
+        {% if d.recent_requests %}
+          {% for r in d.recent_requests %}
+          <div class="feed-item d-flex align-items-center justify-content-between">
+            <div>
+              <div class="d-flex align-items-center gap-2">
+                <span class="fw-bold text-dark">Request #{{ r.id }}</span>
+                <span class="badge {{ r.status_badge_class }}" style="font-size:0.7rem;">
+                  {{ r.status_label }}
+                </span>
+                <span class="text-muted small">Group of <strong>{{ r.group_size }}</strong></span>
+              </div>
+              <div class="text-muted small mt-1" style="font-size:0.75rem;">
+                <i class="bi bi-geo-alt me-1"></i>{{ r.location_name or 'Incident Area' }}
+                · {{ r.submitted_at.strftime('%d %b %H:%M') }} UTC
+                {% if r.injured_count > 0 %}· <span class="text-danger fw-semibold">{{ r.injured_count }} Injured</span>{% endif %}
+                {% if r.has_disabled %}· <span class="text-primary fw-semibold">Wheelchair Required</span>{% endif %}
+              </div>
+            </div>
+            <div>
+              {% if r.status in ('pending', 'partially_allocated') %}
+                <a href="{{ url_for('recommend.recommend_for_request', request_id=r.id) }}" class="btn btn-outline-primary btn-sm py-1 px-2" style="font-size:0.75rem;">
+                  Find Placement
+                </a>
+              {% else %}
+                <a href="{{ url_for('requests.request_detail', request_id=r.id) }}" class="btn btn-outline-secondary btn-sm py-1 px-2" style="font-size:0.75rem;">
+                  View
+                </a>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="p-4 text-center text-muted small">
+            <i class="bi bi-inbox fs-4 d-block mb-1"></i>No shelter requests registered.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── 8. Chart.js Initialization Script ────────────────────────────────────── #}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // ── Chart 1: Shelter Occupancy vs Safe Planning Capacity ───────────────────
+  const ctxLoad = document.getElementById('shelterLoadChart');
+  if (ctxLoad) {
+    const loadData = {{ d.chart_shelter_load | tojson }};
+
+    new Chart(ctxLoad, {
+      type: 'bar',
+      data: {
+        labels: loadData.labels,
+        datasets: [
+          {
+            label: 'Current Occupancy',
+            data: loadData.occupancies,
+            backgroundColor: loadData.bar_colors,
+            borderRadius: 4,
+            borderSkipped: false,
+            barPercentage: 0.7,
+            categoryPercentage: 0.85
+          },
+          {
+            label: 'Safe Planning Capacity',
+            data: loadData.safe_capacities,
+            backgroundColor: 'rgba(100, 116, 139, 0.25)',
+            borderColor: '#64748b',
+            borderWidth: 1,
+            borderRadius: 4,
+            barPercentage: 0.7,
+            categoryPercentage: 0.85
+          }
+        ]
+      },
+      options: {
+        indexAxis: 'y', // Horizontal bars for clear readability
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: { boxWidth: 12, font: { family: 'Inter', size: 11, weight: '500' } }
+          },
+          tooltip: {
+            callbacks: {
+              afterLabel: function(context) {
+                const idx = context.dataIndex;
+                const maxCap = loadData.max_capacities[idx];
+                const occ = loadData.occupancies[idx];
+                const safe = loadData.safe_capacities[idx];
+                const safeAvail = safe - occ;
+                return `Max Physical Capacity: ${maxCap}\nSafe Planning Margin: ${safeAvail >= 0 ? '+' + safeAvail : safeAvail} spots`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: '#f1f5f9' },
+            ticks: { font: { family: 'Inter', size: 10 } },
+            title: { display: true, text: 'Evacuee Headcount', font: { size: 11 } }
+          },
+          y: {
+            grid: { display: false },
+            ticks: { font: { family: 'Inter', size: 11, weight: '600' } }
+          }
+        }
+      }
+    });
+  }
+
+  // ── Chart 2: Capacity Utilization Doughnut ────────────────────────────────
+  const ctxDoughnut = document.getElementById('capacityDoughnutChart');
+  if (ctxDoughnut) {
+    const doughnutData = {{ d.chart_capacity_doughnut | tojson }};
+
+    new Chart(ctxDoughnut, {
+      type: 'doughnut',
+      data: {
+        labels: doughnutData.labels,
+        datasets: [{
+          data: doughnutData.data,
+          backgroundColor: doughnutData.colors,
+          borderWidth: 2,
+          borderColor: '#ffffff',
+          hoverOffset: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '70%',
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 10, font: { family: 'Inter', size: 10 } }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const val = context.raw || 0;
+                const total = doughnutData.data.reduce((a, b) => a + b, 0);
+                const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+                return ` ${context.label}: ${val.toLocaleString()} (${pct}%)`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Create a citizen account on the Emergency Shelter Capacity Prediction and Redistribution System."/>
+  <title>Register — ESCPRS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+</head>
+<body class="auth-body">
+
+<div class="auth-wrapper">
+
+  <!-- System identity panel -->
+  <div class="auth-brand">
+    <i class="bi bi-shield-fill-exclamation auth-brand-icon"></i>
+    <div class="auth-brand-name">ESCPRS</div>
+    <div class="auth-brand-sub">Emergency Shelter Capacity<br>Prediction &amp; Redistribution System</div>
+    <div class="auth-brand-notice">
+      <i class="bi bi-person-plus me-1"></i>
+      Public registration creates a <strong>Citizen</strong> account.<br>
+      Operational roles are assigned by an administrator.
+    </div>
+  </div>
+
+  <!-- Register card -->
+  <div class="auth-card">
+    <h1 class="auth-card-title">Create Account</h1>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }} alert-sm py-2 mb-3" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>{{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('auth.register') }}" novalidate id="register-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+      <div class="mb-3">
+        <label for="full_name" class="form-label fw-medium">Full name</label>
+        <input
+          type="text"
+          class="form-control form-control-sm"
+          id="full_name"
+          name="full_name"
+          value="{{ full_name | default('') }}"
+          autocomplete="name"
+          required
+          autofocus
+          placeholder="Your full name"
+          maxlength="120"
+        />
+      </div>
+
+      <div class="mb-3">
+        <label for="email" class="form-label fw-medium">Email address</label>
+        <input
+          type="email"
+          class="form-control form-control-sm"
+          id="email"
+          name="email"
+          value="{{ email | default('') }}"
+          autocomplete="email"
+          required
+          placeholder="you@example.com"
+        />
+      </div>
+
+      <div class="mb-3">
+        <label for="password" class="form-label fw-medium">Password</label>
+        <div class="input-group input-group-sm">
+          <input
+            type="password"
+            class="form-control"
+            id="password"
+            name="password"
+            autocomplete="new-password"
+            required
+            placeholder="Min. 8 characters"
+            minlength="8"
+          />
+          <button class="btn btn-outline-secondary" type="button" id="togglePw" tabindex="-1" title="Show / hide">
+            <i class="bi bi-eye" id="togglePwIcon"></i>
+          </button>
+        </div>
+        <div class="form-text">At least 8 characters.</div>
+      </div>
+
+      <div class="mb-4">
+        <label for="confirm_password" class="form-label fw-medium">Confirm password</label>
+        <input
+          type="password"
+          class="form-control form-control-sm"
+          id="confirm_password"
+          name="confirm_password"
+          autocomplete="new-password"
+          required
+          placeholder="Repeat password"
+        />
+      </div>
+
+      <div class="mb-3">
+        <div class="auth-role-note">
+          <i class="bi bi-person-badge me-2"></i>
+          You will be registered as a <strong>Citizen</strong>.
+          If you need operational access, contact your district authority.
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-sm w-100" id="register-btn">
+        <i class="bi bi-person-check me-2"></i>Create Account
+      </button>
+    </form>
+
+    <hr class="my-3"/>
+    <p class="text-center text-muted small mb-0">
+      Already have an account?
+      <a href="{{ url_for('auth.login') }}">Sign in</a>
+    </p>
+  </div>
+
+</div><!-- /.auth-wrapper -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-YvpcrYf0tY3lHB60NNkmXc4s9bIOgUxi8T/jzmHMLMp0Dd0+eVh1M7a3MkfNiH2s" crossorigin="anonymous"></script>
+<script>
+  document.getElementById('togglePw').addEventListener('click', function () {
+    const pw   = document.getElementById('password');
+    const icon = document.getElementById('togglePwIcon');
+    if (pw.type === 'password') {
+      pw.type = 'text';
+      icon.className = 'bi bi-eye-slash';
+    } else {
+      pw.type = 'password';
+      icon.className = 'bi bi-eye';
+    }
+  });
+
+  // Submit loading state
+  document.getElementById('register-form').addEventListener('submit', function () {
+    const btn = document.getElementById('register-btn');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating Account…';
+    }
+  });
+</script>
+</body>
+</html>

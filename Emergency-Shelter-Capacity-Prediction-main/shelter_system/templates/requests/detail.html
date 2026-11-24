@@ -1,0 +1,351 @@
+{% extends "base.html" %}
+{% block title %}Request #{{ req.id }} — Group Details{% endblock %}
+
+{% block content %}
+
+<!-- ── Breadcrumb ───────────────────────────────────────────────────────────── -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{{ url_for('requests.list_requests') }}" class="text-decoration-none">Group Requests</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Request #{{ req.id }}</li>
+  </ol>
+</nav>
+
+<!-- ── Header ───────────────────────────────────────────────────────────────── -->
+<div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge {{ req.status_badge_class }} px-3 py-1 fs-6">
+        {{ req.status_label }}
+      </span>
+      <span class="badge bg-light text-muted border px-2 py-1">
+        Request ID: #{{ req.id }}
+      </span>
+    </div>
+    <h1 class="page-title mb-1">
+      Group of {{ req.group_size }} &bull; {{ req.location_name }}
+    </h1>
+    <p class="page-subtitle text-muted mb-0">
+      Submitted by <strong>{{ req.submitter.full_name }}</strong> ({{ req.requesting_team or req.submitter.full_name }})
+      &bull; <i class="bi bi-clock ms-2 me-1"></i>{{ req.formatted_time }}
+    </p>
+  </div>
+
+  <div class="d-flex gap-2">
+    <a href="{{ url_for('requests.list_requests') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Requests
+    </a>
+
+    {% if current_user.can_operate() and req.status in ['pending', 'partially_allocated'] %}
+    <a href="{{ url_for('recommend.recommend_for_request', request_id=req.id) }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-diagram-3 me-1"></i>Find Recommended Shelter
+    </a>
+    {% endif %}
+
+    {% if req.status == 'pending' %}
+    <form method="POST" action="{{ url_for('requests.update_request_status', request_id=req.id) }}"
+          onsubmit="return confirm('Are you sure you want to cancel this emergency request?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="status" value="cancelled"/>
+      <button type="submit" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-x-circle me-1"></i>Cancel Request
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Row 1: Demographics + Geographic Location ────────────────────────────── -->
+<div class="row g-4 mb-4">
+
+  <!-- Group Demographics Card -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header bg-transparent py-3 border-bottom d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-people-fill text-primary"></i>
+          <h5 class="mb-0 fw-semibold text-dark">Group Demographics</h5>
+        </div>
+        <span class="badge bg-primary fs-6 px-3 py-1">Total: {{ req.group_size }}</span>
+      </div>
+
+      <div class="card-body p-4">
+        <div class="row g-3 text-center mb-4">
+          <!-- Injured -->
+          <div class="col-4">
+            <div class="p-3 rounded border {% if req.injured_count > 0 %}bg-danger-subtle border-danger-subtle text-danger{% else %}bg-light text-muted{% endif %}">
+              <i class="bi bi-bandaid fs-4 d-block mb-1"></i>
+              <div class="fs-4 fw-bold">{{ req.injured_count }}</div>
+              <div class="small fw-semibold">Injured</div>
+            </div>
+          </div>
+
+          <!-- Elderly -->
+          <div class="col-4">
+            <div class="p-3 rounded border {% if req.elderly_count > 0 %}bg-warning-subtle border-warning-subtle text-warning-emphasis{% else %}bg-light text-muted{% endif %}">
+              <i class="bi bi-person-walking fs-4 d-block mb-1"></i>
+              <div class="fs-4 fw-bold">{{ req.elderly_count }}</div>
+              <div class="small fw-semibold">Elderly (60+)</div>
+            </div>
+          </div>
+
+          <!-- Children -->
+          <div class="col-4">
+            <div class="p-3 rounded border {% if req.children_count > 0 %}bg-info-subtle border-info-subtle text-info-emphasis{% else %}bg-light text-muted{% endif %}">
+              <i class="bi bi-person fs-4 d-block mb-1"></i>
+              <div class="fs-4 fw-bold">{{ req.children_count }}</div>
+              <div class="small fw-semibold">Children (&lt;12)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Demographics summary progress breakdown -->
+        <div class="small text-muted mb-2 d-flex justify-content-between">
+          <span>Vulnerable Population Share</span>
+          <span class="fw-semibold text-dark">
+            {{ req.injured_count + req.elderly_count + req.children_count }} of {{ req.group_size }} identified
+          </span>
+        </div>
+        <div class="progress" style="height: 10px;">
+          {% set inj_pct = ([((req.injured_count / req.group_size) * 100), 100]|min)|round(1) if req.group_size > 0 else 0 %}
+          {% set eld_pct = ([((req.elderly_count / req.group_size) * 100), 100]|min)|round(1) if req.group_size > 0 else 0 %}
+          {% set chi_pct = ([((req.children_count / req.group_size) * 100), 100]|min)|round(1) if req.group_size > 0 else 0 %}
+          <div class="progress-bar bg-danger" role="progressbar" data-width="{{ inj_pct }}%" title="Injured: {{ req.injured_count }}"></div>
+          <div class="progress-bar bg-warning" role="progressbar" data-width="{{ eld_pct }}%" title="Elderly: {{ req.elderly_count }}"></div>
+          <div class="progress-bar bg-info" role="progressbar" data-width="{{ chi_pct }}%" title="Children: {{ req.children_count }}"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Incident Geographic Location Card -->
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header bg-transparent py-3 border-bottom d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-geo-alt-fill text-danger"></i>
+          <h5 class="mb-0 fw-semibold text-dark">Incident Location &amp; Coordinates</h5>
+        </div>
+        <a href="https://maps.google.com/?q={{ req.latitude }},{{ req.longitude }}" target="_blank" class="btn btn-xs btn-outline-primary">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Open in Maps
+        </a>
+      </div>
+
+      <div class="card-body p-4">
+        <div class="mb-3">
+          <label class="small text-muted text-uppercase fw-semibold d-block">Landmark / Assembly Point</label>
+          <div class="fs-5 fw-bold text-dark">{{ req.location_name }}</div>
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-6">
+            <div class="p-3 bg-light rounded border">
+              <span class="small text-muted d-block">Latitude</span>
+              <span class="fw-bold font-monospace fs-6">{{ '%.6f'|format(req.latitude) }}</span>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="p-3 bg-light rounded border">
+              <span class="small text-muted d-block">Longitude</span>
+              <span class="fw-bold font-monospace fs-6">{{ '%.6f'|format(req.longitude) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="small text-muted">
+          <i class="bi bi-info-circle me-1"></i>
+          These coordinates will be used by the Haversine distance engine in Stage 7 to find the closest available shelters.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Row 2: Special Requirements & Operational Dispatch ──────────────────── -->
+<div class="row g-4 mb-4">
+
+  <!-- Special Requirements Card -->
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header bg-transparent py-3 border-bottom">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-shield-check text-primary"></i>
+          <h5 class="mb-0 fw-semibold text-dark">Special Assistance &amp; Requirements</h5>
+        </div>
+      </div>
+
+      <div class="card-body p-4">
+        <!-- Accessibility Requirements -->
+        <div class="mb-4">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <i class="bi bi-wheelchair text-primary fs-5"></i>
+            <h6 class="mb-0 fw-semibold text-dark">Accessibility Requirements</h6>
+          </div>
+          <div class="p-3 rounded bg-light border">
+            {% if req.accessibility_requirements %}
+              <p class="mb-0 text-dark">{{ req.accessibility_requirements }}</p>
+            {% else %}
+              <span class="text-muted fst-italic">No specific accessibility or wheelchair requirements reported.</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Medical Requirements -->
+        <div class="mb-4">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <i class="bi bi-heart-pulse text-danger fs-5"></i>
+            <h6 class="mb-0 fw-semibold text-dark">Medical Support Requirements</h6>
+          </div>
+          <div class="p-3 rounded bg-light border">
+            {% if req.medical_requirements %}
+              <p class="mb-0 text-dark">{{ req.medical_requirements }}</p>
+            {% else %}
+              <span class="text-muted fst-italic">No emergency medical support or medication assistance requested.</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Other Special Requirements -->
+        <div class="mb-0">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <i class="bi bi-star text-warning fs-5"></i>
+            <h6 class="mb-0 fw-semibold text-dark">Other Special Requirements &amp; Dietary</h6>
+          </div>
+          <div class="p-3 rounded bg-light border">
+            {% if req.other_special_requirements %}
+              <p class="mb-0 text-dark">{{ req.other_special_requirements }}</p>
+            {% else %}
+              <span class="text-muted fst-italic">No additional special dietary or logistical requirements reported.</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Operational Team Info & Notes -->
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header bg-transparent py-3 border-bottom">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-person-badge text-primary"></i>
+          <h5 class="mb-0 fw-semibold text-dark">Dispatch Attribution &amp; Notes</h5>
+        </div>
+      </div>
+
+      <div class="card-body p-4">
+        <ul class="list-group list-group-flush mb-4">
+          <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+            <span class="text-muted">Requesting Unit / Team</span>
+            <span class="fw-semibold text-dark">{{ req.requesting_team or '—' }}</span>
+          </li>
+          <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+            <span class="text-muted">Field Contact Phone</span>
+            <span class="fw-semibold text-dark">
+              {% if req.contact_phone %}
+                <a href="tel:{{ req.contact_phone }}" class="text-decoration-none">
+                  <i class="bi bi-telephone me-1"></i>{{ req.contact_phone }}
+                </a>
+              {% else %}
+                <span class="text-muted fst-italic">Not provided</span>
+              {% endif %}
+            </span>
+          </li>
+          <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+            <span class="text-muted">Submitted By</span>
+            <span>
+              <strong>{{ req.submitter.full_name }}</strong>
+              <span class="role-badge role-badge-{{ req.submitter.role }} ms-1">{{ req.submitter.role_label }}</span>
+            </span>
+          </li>
+          <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+            <span class="text-muted">Submission Timestamp</span>
+            <span class="text-dark small">{{ req.formatted_time }}</span>
+          </li>
+        </ul>
+
+        <h6 class="fw-semibold text-dark mb-2"><i class="bi bi-chat-left-text me-1 text-muted"></i>Operational Notes</h6>
+        <div class="p-3 rounded bg-light border">
+          {% if req.notes %}
+            <p class="mb-0 small text-dark">{{ req.notes }}</p>
+          {% else %}
+            <span class="text-muted small fst-italic">No operational dispatch notes provided.</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Row 3: Confirmed Shelter Allocations (If Any) ────────────────────────── -->
+{% set allocs = req.allocations.all() %}
+{% if allocs %}
+<div class="card mb-4">
+  <div class="card-header bg-light py-3 d-flex align-items-center justify-content-between">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-check2-all text-success fs-5"></i>
+      <h5 class="mb-0 fw-semibold text-dark">Confirmed Shelter Placements &amp; Quotas</h5>
+    </div>
+    <span class="badge bg-success px-3 py-1">{{ allocs|length }} Shelter{% if allocs|length != 1 %}s{% endif %} Allocated</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light text-muted small text-uppercase">
+          <tr>
+            <th class="ps-4">Shelter Name</th>
+            <th class="text-center">Evacuees Placed</th>
+            <th>Status</th>
+            <th>Confirmed By</th>
+            <th>Timestamp</th>
+            <th class="text-end pe-4">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in allocs %}
+          <tr>
+            <td class="ps-4">
+              <strong>
+                <a href="{{ url_for('shelters.shelter_detail', shelter_id=a.shelter_id) }}" class="text-decoration-none">
+                  {{ a.shelter.name }}
+                </a>
+              </strong>
+              <div class="text-muted small"><i class="bi bi-geo-alt me-1"></i>{{ a.shelter.address }}</div>
+            </td>
+            <td class="text-center">
+              <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-1 font-monospace fs-6">
+                +{{ a.allocated_count }} people
+              </span>
+            </td>
+            <td>
+              <span class="badge bg-success">Confirmed</span>
+            </td>
+            <td>
+              {{ a.confirmer.full_name if a.confirmer else 'System Dispatcher' }}
+            </td>
+            <td class="text-muted small">
+              {{ a.confirmed_at.strftime('%d %b %Y, %H:%M') if a.confirmed_at else '—' }}
+            </td>
+            <td class="text-end pe-4">
+              <a href="{{ url_for('shelters.shelter_detail', shelter_id=a.shelter_id) }}" class="btn btn-outline-secondary btn-sm">
+                View Shelter
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.progress-bar[data-width]').forEach(function(el) {
+    el.style.width = el.getAttribute('data-width');
+  });
+</script>
+{% endblock %}

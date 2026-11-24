@@ -1,0 +1,1001 @@
+/* =============================================================================
+   Emergency Shelter Capacity Prediction & Redistribution System
+   Custom stylesheet — Professional emergency-management UI
+   ============================================================================= */
+
+/* ── Google Font ──────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ── CSS Custom Properties ────────────────────────────────────────────────── */
+:root {
+  --color-bg:          #f4f6f9;       /* Page background */
+  --color-sidebar-bg:  #1a2233;       /* Dark sidebar */
+  --color-sidebar-txt: #b8c4d4;
+  --color-sidebar-active: #2d7dd2;
+  --color-navbar-bg:   #0d1b2a;       /* Very dark top bar */
+  --color-text:        #1a2233;
+  --color-text-muted:  #6c757d;
+  --color-border:      #dee2e6;
+  --color-card-bg:     #ffffff;
+
+  /* Status colours */
+  --color-safe:        #198754;
+  --color-moderate:    #ffc107;
+  --color-high:        #fd7e14;
+  --color-critical:    #dc3545;
+  --color-overcrowded: #6f0014;
+
+  --sidebar-width:     240px;
+  --navbar-height:     54px;
+  --font-family:       'Inter', system-ui, sans-serif;
+}
+
+/* ── Reset / Base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-family);
+  font-size: 0.875rem;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+
+/* ── Top Navbar ───────────────────────────────────────────────────────────── */
+.escprs-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--navbar-height);
+  background-color: var(--color-navbar-bg);
+  z-index: 1030;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.escprs-navbar .navbar-brand {
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+
+.sidebar-toggle {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #ffffff;
+  padding: 4px 8px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.sidebar-toggle:hover { background: rgba(255,255,255,0.1); }
+
+/* ── Layout Wrapper ───────────────────────────────────────────────────────── */
+.escprs-layout {
+  display: flex;
+  margin-top: var(--navbar-height);
+  min-height: calc(100vh - var(--navbar-height));
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+.escprs-sidebar {
+  width: var(--sidebar-width);
+  background-color: var(--color-sidebar-bg);
+  color: var(--color-sidebar-txt);
+  flex-shrink: 0;
+  position: fixed;
+  top: var(--navbar-height);
+  left: 0;
+  bottom: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, width 0.2s ease;
+  z-index: 1020;
+}
+
+/* Sidebar scrollbar — subtle */
+.escprs-sidebar::-webkit-scrollbar { width: 4px; }
+.escprs-sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+/* Collapsed sidebar (icon only) */
+.escprs-sidebar.collapsed { transform: translateX(calc(-1 * var(--sidebar-width))); }
+.escprs-layout.sidebar-collapsed .escprs-main { margin-left: 0; }
+
+.sidebar-nav { padding: 12px 0; flex: 1; }
+
+.sidebar-section-label {
+  text-transform: uppercase;
+  font-size: 0.675rem;
+  letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.3);
+  padding: 18px 16px 4px;
+  font-weight: 600;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  color: var(--color-sidebar-txt);
+  text-decoration: none;
+  font-size: 0.855rem;
+  font-weight: 500;
+  border-left: 3px solid transparent;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sidebar-link i { font-size: 1rem; flex-shrink: 0; }
+.sidebar-link:hover { background: rgba(255,255,255,0.06); color: #ffffff; }
+.sidebar-link.active { background: rgba(45,125,210,0.2); color: #ffffff; border-left-color: var(--color-sidebar-active); }
+
+.sidebar-badge {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sidebar-badge.pending { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.4); }
+.sidebar-badge.new     { background: #198754; color: #fff; }
+
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  font-size: 0.75rem;
+}
+
+/* ── Main Content Area ────────────────────────────────────────────────────── */
+.escprs-main {
+  flex: 1;
+  margin-left: var(--sidebar-width);
+  padding: 28px 28px 40px;
+  min-width: 0;
+  transition: margin-left 0.2s ease;
+}
+
+/* ── Page Header ──────────────────────────────────────────────────────────── */
+.page-header { border-bottom: 1px solid var(--color-border); padding-bottom: 14px; }
+.page-title  { font-size: 1.25rem; font-weight: 700; margin: 0 0 4px; }
+.page-subtitle { font-size: 0.855rem; margin: 0; }
+
+/* ── Status Banners ───────────────────────────────────────────────────────── */
+.status-banner {
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 0.855rem;
+  border: 1px solid transparent;
+}
+.status-banner-info    { background: #e8f0fe; border-color: #c6d4f9; color: #1a4cb5; }
+.status-banner-warning { background: #fff8e1; border-color: #ffe082; color: #8a6000; }
+.status-banner-danger  { background: #fdecea; border-color: #f5c6cb; color: #7c1522; }
+
+/* ── Feature Cards (home page) ────────────────────────────────────────────── */
+.feature-card {
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 18px 20px;
+  height: 100%;
+}
+.feature-card-done    { border-left: 4px solid var(--color-safe); }
+.feature-card-current { border-left: 4px solid var(--color-sidebar-active); }
+.feature-card-pending { border-left: 4px solid #dee2e6; }
+
+.feature-card-header  { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.feature-card-title   { font-size: 0.95rem; font-weight: 600; margin: 0; }
+.feature-card-desc    { font-size: 0.835rem; color: var(--color-text-muted); margin-bottom: 10px; }
+
+.stage-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.stage-done    { background: #d1e7dd; color: #0a3622; }
+.stage-current { background: #cfe2ff; color: #0a2d6b; }
+.stage-pending { background: #f8f9fa; color: #6c757d; border: 1px solid #dee2e6; }
+
+.feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+.feature-list li { padding: 2px 0; }
+.feature-list li i { margin-right: 6px; }
+.feature-list li .bi-check2 { color: var(--color-safe); }
+.feature-list li .bi-clock   { color: #adb5bd; }
+
+/* ── Capacity Status Badges ───────────────────────────────────────────────── */
+.badge-safe        { background-color: var(--color-safe);        color: #fff; }
+.badge-moderate    { background-color: var(--color-moderate);     color: #000; }
+.badge-high        { background-color: var(--color-high);         color: #fff; }
+.badge-critical    { background-color: var(--color-critical);     color: #fff; }
+.badge-overcrowded { background-color: var(--color-overcrowded);  color: #fff; }
+
+/* ── Tables ───────────────────────────────────────────────────────────────── */
+.table { font-size: 0.855rem; }
+.table th {
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  background-color: #f8f9fa;
+  border-bottom: 2px solid var(--color-border);
+}
+.table td { vertical-align: middle; }
+
+/* ── Cards ────────────────────────────────────────────────────────────────── */
+.card { border: 1px solid var(--color-border); border-radius: 8px; }
+.card-header {
+  background: #f8f9fa;
+  border-bottom: 1px solid var(--color-border);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────────── */
+.btn { font-size: 0.855rem; font-weight: 500; border-radius: 5px; }
+.btn-sm { font-size: 0.8rem; }
+
+/* ── Mobile Sidebar Drawer & Backdrop ─────────────────────────────────────── */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  z-index: 1019;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .escprs-sidebar          { transform: translateX(calc(-1 * var(--sidebar-width))); box-shadow: none; }
+  .escprs-sidebar.show     { transform: translateX(0); box-shadow: 2px 0 16px rgba(0,0,0,0.3); }
+  .sidebar-backdrop.show   { display: block; }
+  .escprs-main             { margin-left: 0; padding: 16px; }
+  .escprs-layout.sidebar-collapsed .escprs-main { margin-left: 0; }
+}
+
+/* =============================================================================
+   Auth Pages (login.html, register.html)
+   Stand-alone pages with no sidebar — centred card layout.
+   ============================================================================= */
+
+.auth-body {
+  background-color: #0d1b2a;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.auth-wrapper {
+  display: flex;
+  gap: 0;
+  width: 100%;
+  max-width: 780px;
+  background: var(--color-card-bg);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+}
+
+/* Left branding panel */
+.auth-brand {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--color-navbar-bg);
+  color: #ffffff;
+  padding: 40px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 10px;
+}
+
+.auth-brand-icon {
+  font-size: 2.4rem;
+  color: #ffc107;
+  margin-bottom: 6px;
+}
+
+.auth-brand-name {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+}
+
+.auth-brand-sub {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.auth-brand-notice {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 5px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  margin-top: auto;
+}
+
+/* Right form card */
+.auth-card {
+  flex: 1;
+  padding: 40px 36px;
+}
+
+.auth-card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 20px;
+  color: var(--color-text);
+}
+
+.auth-role-note {
+  background: #f8f9fa;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-sidebar-active);
+  border-radius: 5px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+/* Dev credentials panel */
+.dev-creds {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+  padding: 10px 12px;
+}
+
+/* Responsive: stack on small screens */
+@media (max-width: 600px) {
+  .auth-wrapper { flex-direction: column; }
+  .auth-brand   { width: 100%; padding: 24px 20px; }
+  .auth-card    { padding: 24px 20px; }
+}
+
+/* =============================================================================
+   Role Badges (top navbar)
+   ============================================================================= */
+.role-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.role-badge-admin           { background: #dc3545; color: #fff; }
+.role-badge-authority       { background: #6f42c1; color: #fff; }
+.role-badge-responder       { background: #0d6efd; color: #fff; }
+.role-badge-shelter_manager { background: #198754; color: #fff; }
+.role-badge-citizen         { background: #6c757d; color: #fff; }
+
+/* User menu button */
+.user-menu-btn {
+  font-size: 0.8rem;
+  border-color: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.85);
+}
+.user-menu-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+/* =============================================================================
+   Error Pages (403, 404)
+   ============================================================================= */
+.error-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.error-code {
+  font-size: 5rem;
+  font-weight: 800;
+  color: #dee2e6;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.error-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 10px;
+}
+
+.error-desc {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  max-width: 420px;
+  line-height: 1.6;
+}
+
+/* =============================================================================
+   Shelter Management — Stage 4
+   ============================================================================= */
+
+/* ── Capacity Bars ─────────────────────────────────────────────────────────── */
+.cap-bar {
+  height: 6px;
+  background: #e9ecef;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cap-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  max-width: 100%;
+}
+
+/* Colour map for capacity status */
+.cap-bar-safe        { background: var(--color-safe); }
+.cap-bar-moderate    { background: var(--color-moderate); }
+.cap-bar-high        { background: var(--color-high); }
+.cap-bar-critical    { background: var(--color-critical); }
+.cap-bar-overcrowded { background: var(--color-overcrowded); }
+
+.cap-bar-wrap { display: flex; flex-direction: column; gap: 4px; }
+.cap-bar-labels { display: flex; align-items: center; gap: 8px; }
+
+/* Capacity status chips */
+.cap-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.cap-badge-safe        { background: #d4edda; color: #155724; }
+.cap-badge-moderate    { background: #fff3cd; color: #856404; }
+.cap-badge-high        { background: #ffe5d0; color: #8b2500; }
+.cap-badge-critical    { background: #f8d7da; color: #721c24; }
+.cap-badge-overcrowded { background: #721c24; color: #fff; }
+
+/* ── Operational Status Badges ─────────────────────────────────────────────── */
+.op-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.op-badge-active   { background: #d4edda; color: #155724; }
+.op-badge-inactive { background: #e2e3e5; color: #383d41; }
+.op-badge-full     { background: #f8d7da; color: #721c24; }
+.op-badge-damaged  { background: #ffc107; color: #000; }
+.op-badge-closed   { background: #343a40; color: #fff; }
+
+/* ── Summary Stats Strip ───────────────────────────────────────────────────── */
+.shelter-stats-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.stat-chip {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 100px;
+}
+
+.stat-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-chip-danger { border-color: #f8d7da; background: #fff5f5; }
+.stat-chip-danger .stat-value { color: #721c24; }
+.stat-chip-warn   { border-color: #fff3cd; background: #fffef0; }
+.stat-chip-ok     { border-color: #d4edda; background: #f0fff4; }
+.stat-chip-ok .stat-value { color: #155724; }
+
+/* ── Shelter Table ─────────────────────────────────────────────────────────── */
+.shelter-table thead th {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  background: #f8f9fa;
+  border-bottom: 2px solid var(--color-border);
+  padding: 8px 10px;
+}
+
+.shelter-table tbody td { padding: 10px 10px; border-bottom: 1px solid #f0f0f0; }
+.shelter-table tbody tr:last-child td { border-bottom: none; }
+.shelter-table tbody tr:hover { background: #fbfcfd; }
+
+.shelter-name a { color: var(--color-text); }
+.shelter-name a:hover { color: var(--color-sidebar-active); }
+.shelter-address { font-size: 0.78rem; }
+
+.fac-icons { display: flex; gap: 6px; font-size: 0.95rem; }
+
+/* Small action buttons */
+.btn-xs { padding: 2px 7px; font-size: 0.75rem; line-height: 1.5; }
+
+/* ── Filter Bar ─────────────────────────────────────────────────────────────── */
+.shelter-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ── Empty State ───────────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  border: 2px dashed var(--color-border);
+  border-radius: 8px;
+  background: #fafbfc;
+  margin-top: 8px;
+}
+
+.empty-state-icon {
+  font-size: 2.5rem;
+  color: #ced4da;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.empty-state-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 6px;
+}
+
+.empty-state-desc {
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+  max-width: 380px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* ── Detail Page ───────────────────────────────────────────────────────────── */
+.detail-meta-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px 32px;
+  padding: 12px 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.meta-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.detail-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.detail-card-header {
+  background: #f8f9fa;
+  border-bottom: 1px solid var(--color-border);
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.detail-card-body { padding: 16px; }
+
+/* Occupancy large numbers */
+.occ-numbers { display: flex; align-items: baseline; gap: 3px; }
+.occ-current { font-size: 2.4rem; font-weight: 800; line-height: 1; color: var(--color-text); }
+.occ-sep     { font-size: 1.4rem; color: var(--color-text-muted); }
+.occ-max     { font-size: 1.4rem; font-weight: 600; color: var(--color-text-muted); }
+.occ-unit    { font-size: 0.85rem; color: var(--color-text-muted); margin-left: 4px; }
+
+.occ-stats { display: flex; justify-content: space-between; }
+.occ-stat  { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.occ-stat-val   { font-size: 1.1rem; font-weight: 700; }
+.occ-stat-label { font-size: 0.7rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Facilities / resources row list */
+.fac-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+
+.fac-row-border { border-bottom: 1px solid #f0f0f0; }
+.fac-yes { font-size: 0.8rem; font-weight: 600; color: #198754; }
+.fac-no  { font-size: 0.8rem; }
+
+/* ── Form Sections ─────────────────────────────────────────────────────────── */
+.form-section {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.form-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 10px;
+  margin-bottom: 16px;
+}
+
+.facility-check {
+  padding: 6px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+.facility-check:last-child { border-bottom: none; }
+
+.form-submit-bar {
+  border-top: 1px solid var(--color-border);
+  padding-top: 16px;
+}
+
+/* Live capacity preview */
+.cap-preview {
+  background: #f8f9fa;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.cap-preview-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* =============================================================================
+   Stage 5 — Facilities & Resources
+   ============================================================================= */
+
+/* ── Resource rows ─────────────────────────────────────────────────────────── */
+.resource-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.resource-icon {
+  font-size: 1.15rem;
+  width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.resource-info {
+  flex: 1;
+}
+
+.resource-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.resource-desc {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.resource-value-wrap {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.resource-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 50px;
+  text-align: right;
+}
+
+.resource-unit {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+/* Colour states for resource quantities */
+.resource-ok   { color: #198754; }
+.resource-low  { color: #dc3545; }
+.resource-zero { color: #adb5bd; }
+
+.resource-low-badge {
+  color: #dc3545;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+/* ── Inline Edit Panel (facilities + resources) ────────────────────────────── */
+.facility-edit-form {
+  background: #f8f9fa;
+  border-top: 1px solid var(--color-border);
+  padding: 18px 18px 14px;
+}
+
+.facility-edit-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin-bottom: 14px;
+}
+
+/* Facility checkbox grid — 2 columns on wider screens */
+.fac-check-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 16px;
+}
+
+@media (max-width: 480px) {
+  .fac-check-grid { grid-template-columns: 1fr; }
+}
+
+.fac-check-item {
+  padding: 5px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.fac-check-item:last-child { border-bottom: none; }
+
+/* Tighter styling for fac row yes/no indicators */
+.fac-yes {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #198754;
+  white-space: nowrap;
+}
+
+.fac-no {
+  font-size: 0.78rem;
+  color: #adb5bd;
+  white-space: nowrap;
+}
+
+/* =============================================================================
+   Stage 6 — Occupancy Tracking & Capacity Telemetry
+   ============================================================================= */
+
+/* Stat Cards for Telemetry Grid */
+.stat-card {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.stat-card-val {
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-card-hint {
+  font-size: 0.75rem;
+  margin-top: 4px;
+}
+
+/* Safe limit progress bar marker */
+.safe-limit-marker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #0d6efd;
+  z-index: 2;
+  box-shadow: 0 0 4px rgba(13, 110, 253, 0.6);
+  pointer-events: none;
+}
+
+/* Enhanced Capacity Badges with crisp colors */
+.cap-badge-safe {
+  background: #d1e7dd !important;
+  color: #0f5132 !important;
+  border: 1px solid #badbcc !important;
+}
+
+.cap-badge-moderate {
+  background: #cff4fc !important;
+  color: #055160 !important;
+  border: 1px solid #b6effb !important;
+}
+
+.cap-badge-high {
+  background: #fff3cd !important;
+  color: #664d03 !important;
+  border: 1px solid #ffecb5 !important;
+}
+
+.cap-badge-critical {
+  background: #f8d7da !important;
+  color: #842029 !important;
+  border: 1px solid #f5c2c7 !important;
+}
+
+.cap-badge-overcrowded {
+  background: #2b1113 !important;
+  color: #ff6b6b !important;
+  border: 1px solid #dc3545 !important;
+  font-weight: 700;
+}
+
+/* Progress bar fill colors */
+.cap-bar-safe        { background: #198754; }
+.cap-bar-moderate    { background: #0dcaf0; }
+.cap-bar-high        { background: #ffc107; }
+.cap-bar-critical    { background: #dc3545; }
+.cap-bar-overcrowded { background: #6f1a07; }
+
+/* Quick adjustment buttons */
+.quick-delta, .quick-occ {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+
+.hover-primary:hover {
+  color: var(--color-primary, #0d6efd) !important;
+}
+
+/* =============================================================================
+   Stage 7 — Shelter Request Management
+   ============================================================================= */
+
+/* Request Status Badges */
+.req-badge-pending {
+  background: #fff3cd !important;
+  color: #664d03 !important;
+  border: 1px solid #ffecb5 !important;
+}
+
+.req-badge-allocated {
+  background: #d1e7dd !important;
+  color: #0f5132 !important;
+  border: 1px solid #badbcc !important;
+}
+
+.req-badge-partial {
+  background: #cff4fc !important;
+  color: #055160 !important;
+  border: 1px solid #b6effb !important;
+}
+
+.req-badge-cancelled {
+  background: #e2e3e5 !important;
+  color: #41464b !important;
+  border: 1px solid #d3d6d8 !important;
+}
+
+/* Form Helper Stepper and Preset Buttons */
+.size-preset, .coord-preset {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  font-weight: 500;
+  border-radius: 4px;
+}
+
+/* =============================================================================
+   Stage 8 — Shelter Recommendation Engine
+   ============================================================================= */
+
+.recommendation-card-top {
+  border-left: 5px solid #198754 !important;
+  background: #ffffff;
+}
+
+.recommendation-reasons {
+  list-style: none;
+  padding-left: 0 !important;
+}
+
+.recommendation-reasons li {
+  position: relative;
+  padding-left: 24px;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: #1e293b;
+}
+
+.recommendation-reasons li::before {
+  content: "\F26E";
+  font-family: "bootstrap-icons";
+  position: absolute;
+  left: 0;
+  top: 1px;
+  color: #198754;
+  font-weight: bold;
+}
+
+.table-success-subtle {
+  background-color: rgba(25, 135, 84, 0.05) !important;
+}
+
+.extra-small {
+  font-size: 0.75rem;
+}

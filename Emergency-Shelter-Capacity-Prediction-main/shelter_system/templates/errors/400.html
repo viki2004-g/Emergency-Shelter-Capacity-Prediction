@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Bad Request{% endblock %}
+{% block content %}
+<div class="error-page">
+  <div class="error-code">400</div>
+  <div class="error-title">Invalid Request</div>
+  <p class="error-desc">
+    Your request could not be processed due to invalid parameters or an expired security token.<br>
+    Please refresh the page and try submitting again.
+  </p>
+  <div class="mt-4">
+    <a href="{{ url_for('main.index') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-house-door me-1"></i>Return to Home
+    </a>
+  </div>
+</div>
+{% endblock %}

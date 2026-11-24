@@ -1,0 +1,464 @@
+{% extends "base.html" %}
+{% block title %}New Emergency Shelter Request{% endblock %}
+
+{% block content %}
+
+<!-- ── Breadcrumbs ──────────────────────────────────────────────────────────── -->
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb small">
+    <li class="breadcrumb-item"><a href="{{ url_for('requests.list_requests') }}" class="text-decoration-none">Group Requests</a></li>
+    <li class="breadcrumb-item active" aria-current="page">New Request</li>
+  </ol>
+</nav>
+
+<!-- ── Emergency Header ─────────────────────────────────────────────────────── -->
+<div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+        <i class="bi bi-exclamation-octagon-fill me-1"></i>Emergency Intake
+      </span>
+      <span class="badge bg-light text-muted border px-2 py-1">Step 1 of 2: Group Registration</span>
+    </div>
+    <h1 class="page-title mb-1">New Shelter Request</h1>
+    <p class="page-subtitle text-muted mb-0">
+      Submit incoming displaced group details, triage special requirements, and register coordinates.
+    </p>
+  </div>
+  <div>
+    <a href="{{ url_for('requests.list_requests') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-x-lg me-1"></i>Cancel
+    </a>
+  </div>
+</div>
+
+<!-- ── Validation Summary Box (Server or Client) ────────────────────────────── -->
+{% if errors %}
+<div class="alert alert-danger shadow-sm mb-4" role="alert">
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+    <strong class="fs-6">Please correct the highlighted issues:</strong>
+  </div>
+  <ul class="mb-0 ps-3">
+    {% for field, msg in errors.items() %}
+      <li>{{ msg }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+<div class="alert alert-danger shadow-sm mb-4 d-none" id="client-errors-box" role="alert"></div>
+
+<form method="POST" action="{{ url_for('requests.new_request') }}" id="emergency-request-form" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       SECTION 1: Team & Geographic Location
+       ══════════════════════════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-transparent py-3 border-bottom d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-primary text-white rounded-circle px-2 py-1">1</span>
+        <h5 class="mb-0 fw-semibold text-dark">Requesting Unit &amp; Incident Location</h5>
+      </div>
+      <span class="text-muted small">Where is the group located?</span>
+    </div>
+
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <!-- Requesting User / Team -->
+        <div class="col-md-6">
+          <label for="requesting_team" class="form-label fw-semibold text-dark">
+            Requesting User / Team Name <span class="text-danger">*</span>
+          </label>
+          <div class="input-group">
+            <span class="input-group-text bg-light"><i class="bi bi-person-badge text-muted"></i></span>
+            <input type="text" class="form-control {% if errors.get('requesting_team') %}is-invalid{% endif %}"
+                   id="requesting_team" name="requesting_team"
+                   value="{{ form_data.get('requesting_team', default_team) }}"
+                   placeholder="e.g. NDRF Quick Response Team 2" required/>
+          </div>
+          <div class="form-text">Name of response team, NGO, or citizen representative</div>
+        </div>
+
+        <!-- Contact Phone -->
+        <div class="col-md-6">
+          <label for="contact_phone" class="form-label fw-semibold text-dark">
+            Field Contact Phone <span class="text-muted small">(recommended)</span>
+          </label>
+          <div class="input-group">
+            <span class="input-group-text bg-light"><i class="bi bi-telephone text-muted"></i></span>
+            <input type="text" class="form-control {% if errors.get('contact_phone') %}is-invalid{% endif %}"
+                   id="contact_phone" name="contact_phone"
+                   value="{{ form_data.get('contact_phone', '') }}"
+                   placeholder="e.g. +91 98765 43210"/>
+          </div>
+          <div class="form-text">Direct phone number of team lead or group coordinator</div>
+        </div>
+
+        <!-- Location Name / Landmark -->
+        <div class="col-12">
+          <label for="location_name" class="form-label fw-semibold text-dark">
+            Location Name / Incident Landmark <span class="text-danger">*</span>
+          </label>
+          <div class="input-group">
+            <span class="input-group-text bg-light"><i class="bi bi-geo-alt text-muted"></i></span>
+            <input type="text" class="form-control {% if errors.get('location_name') %}is-invalid{% endif %}"
+                   id="location_name" name="location_name"
+                   value="{{ form_data.get('location_name', '') }}"
+                   placeholder="e.g. Deccan Gymkhana Bus Depot / Near Mutha River Bridge" required/>
+          </div>
+          <div class="form-text">Specific area, school, building, or landmark where the group is currently gathered</div>
+        </div>
+
+        <!-- GPS Coordinates -->
+        <div class="col-md-6">
+          <label for="latitude" class="form-label fw-semibold text-dark">
+            Latitude <span class="text-danger">*</span>
+          </label>
+          <input type="number" step="any" class="form-control {% if errors.get('latitude') %}is-invalid{% endif %}"
+                 id="latitude" name="latitude"
+                 value="{{ form_data.get('latitude', '') }}"
+                 placeholder="e.g. 18.5204" required/>
+          <div class="form-text">Decimal degrees between -90.0 and +90.0</div>
+          {% if errors.get('latitude') %}
+            <div class="invalid-feedback">{{ errors.get('latitude') }}</div>
+          {% endif %}
+        </div>
+
+        <div class="col-md-6">
+          <label for="longitude" class="form-label fw-semibold text-dark">
+            Longitude <span class="text-danger">*</span>
+          </label>
+          <input type="number" step="any" class="form-control {% if errors.get('longitude') %}is-invalid{% endif %}"
+                 id="longitude" name="longitude"
+                 value="{{ form_data.get('longitude', '') }}"
+                 placeholder="e.g. 73.8567" required/>
+          <div class="form-text">Decimal degrees between -180.0 and +180.0</div>
+          {% if errors.get('longitude') %}
+            <div class="invalid-feedback">{{ errors.get('longitude') }}</div>
+          {% endif %}
+        </div>
+
+        <!-- Location Helper Tools -->
+        <div class="col-12 pt-1">
+          <div class="p-2 bg-light rounded border d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <button type="button" class="btn btn-sm btn-outline-primary" id="btn-detect-gps">
+              <i class="bi bi-crosshair me-1"></i>Use Device GPS Location
+            </button>
+            <div class="d-flex align-items-center gap-1">
+              <span class="small text-muted me-1">Pune presets:</span>
+              <button type="button" class="btn btn-xs btn-outline-secondary coord-preset" data-lat="18.520430" data-lng="73.856744" data-loc="Shivajinagar Central">Shivajinagar</button>
+              <button type="button" class="btn btn-xs btn-outline-secondary coord-preset" data-lat="18.514400" data-lng="73.841500" data-loc="Deccan Gymkhana">Deccan</button>
+              <button type="button" class="btn btn-xs btn-outline-secondary coord-preset" data-lat="18.507400" data-lng="73.807700" data-loc="Kothrud Stand">Kothrud</button>
+              <button type="button" class="btn btn-xs btn-outline-secondary coord-preset" data-lat="18.508900" data-lng="73.861700" data-loc="Swargate Depot">Swargate</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       SECTION 2: Group Size & Demographics
+       ══════════════════════════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-transparent py-3 border-bottom d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-primary text-white rounded-circle px-2 py-1">2</span>
+        <h5 class="mb-0 fw-semibold text-dark">Group Size &amp; Demographic Breakdown</h5>
+      </div>
+      <span class="text-muted small">Must be greater than 0</span>
+    </div>
+
+    <div class="card-body p-4">
+      <!-- Total Group Size -->
+      <div class="p-3 bg-primary-subtle rounded border border-primary-subtle mb-4">
+        <div class="row align-items-center g-3">
+          <div class="col-md-6">
+            <label for="group_size" class="form-label fw-bold text-dark fs-6 mb-1">
+              Total Group Size (People Needing Shelter) <span class="text-danger">*</span>
+            </label>
+            <div class="input-group input-group-lg">
+              <span class="input-group-text bg-white"><i class="bi bi-people-fill text-primary"></i></span>
+              <input type="number" class="form-control fw-bold text-primary fs-4 {% if errors.get('group_size') %}is-invalid{% endif %}"
+                     id="group_size" name="group_size" min="1"
+                     value="{{ form_data.get('group_size', '') }}"
+                     placeholder="e.g. 25" required/>
+            </div>
+            {% if errors.get('group_size') %}
+              <div class="text-danger small mt-1">{{ errors.get('group_size') }}</div>
+            {% endif %}
+          </div>
+          <div class="col-md-6">
+            <span class="small fw-semibold text-muted d-block mb-1">Emergency quick sizes:</span>
+            <div class="d-flex flex-wrap gap-1">
+              <button type="button" class="btn btn-sm btn-outline-primary size-preset" data-size="5">5 people</button>
+              <button type="button" class="btn btn-sm btn-outline-primary size-preset" data-size="12">12 people</button>
+              <button type="button" class="btn btn-sm btn-outline-primary size-preset" data-size="25">25 people</button>
+              <button type="button" class="btn btn-sm btn-outline-primary size-preset" data-size="50">50 people</button>
+              <button type="button" class="btn btn-sm btn-outline-primary size-preset" data-size="100">100 people</button>
+            </div>
+            <div class="small text-muted mt-1">Rule: Group size must strictly be greater than zero.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vulnerable People Breakdown -->
+      <h6 class="fw-semibold text-dark mb-2">Vulnerable Demographics Breakdown <span class="text-muted fw-normal small">(subset of total group size, counts &ge; 0)</span></h6>
+      <div class="row g-3">
+        <!-- Injured -->
+        <div class="col-md-4">
+          <div class="p-3 bg-light rounded border h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <label for="injured_count" class="form-label fw-semibold text-danger mb-0">
+                <i class="bi bi-bandaid me-1"></i>Injured People
+              </label>
+              <span class="badge bg-danger-subtle text-danger border border-danger-subtle">Medical priority</span>
+            </div>
+            <input type="number" class="form-control {% if errors.get('injured_count') %}is-invalid{% endif %}"
+                   id="injured_count" name="injured_count" min="0"
+                   value="{{ form_data.get('injured_count', '0') }}"/>
+            <div class="form-text">Persons needing first aid or urgent triage</div>
+            {% if errors.get('injured_count') %}
+              <div class="invalid-feedback d-block">{{ errors.get('injured_count') }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Elderly -->
+        <div class="col-md-4">
+          <div class="p-3 bg-light rounded border h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <label for="elderly_count" class="form-label fw-semibold text-warning-emphasis mb-0">
+                <i class="bi bi-person-walking me-1"></i>Elderly People
+              </label>
+              <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Age 60+</span>
+            </div>
+            <input type="number" class="form-control {% if errors.get('elderly_count') %}is-invalid{% endif %}"
+                   id="elderly_count" name="elderly_count" min="0"
+                   value="{{ form_data.get('elderly_count', '0') }}"/>
+            <div class="form-text">Seniors requiring ground-floor or quiet accommodation</div>
+            {% if errors.get('elderly_count') %}
+              <div class="invalid-feedback d-block">{{ errors.get('elderly_count') }}</div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Children -->
+        <div class="col-md-4">
+          <div class="p-3 bg-light rounded border h-100">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <label for="children_count" class="form-label fw-semibold text-info-emphasis mb-0">
+                <i class="bi bi-person me-1"></i>Children &amp; Infants
+              </label>
+              <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Age &lt; 12</span>
+            </div>
+            <input type="number" class="form-control {% if errors.get('children_count') %}is-invalid{% endif %}"
+                   id="children_count" name="children_count" min="0"
+                   value="{{ form_data.get('children_count', '0') }}"/>
+            <div class="form-text">Minors requiring family safe zones</div>
+            {% if errors.get('children_count') %}
+              <div class="invalid-feedback d-block">{{ errors.get('children_count') }}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════════════════════════════════════
+       SECTION 3: Special Assistance & Medical Requirements
+       ══════════════════════════════════════════════════════════════════════════ -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-transparent py-3 border-bottom d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-primary text-white rounded-circle px-2 py-1">3</span>
+        <h5 class="mb-0 fw-semibold text-dark">Special Assistance &amp; Facility Requirements</h5>
+      </div>
+      <span class="text-muted small">Hard-constraint matching for recommendations</span>
+    </div>
+
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <!-- Accessibility Requirements -->
+        <div class="col-md-6">
+          <label for="accessibility_requirements" class="form-label fw-semibold text-dark">
+            <i class="bi bi-wheelchair text-primary me-1"></i>Accessibility Requirements
+          </label>
+          <textarea class="form-control" id="accessibility_requirements" name="accessibility_requirements" rows="2"
+                    placeholder="Specify wheelchair access, ramp needs, ground-floor restriction, sensory disability…">{{ form_data.get('accessibility_requirements', '') }}</textarea>
+          <div class="form-text">Will restrict shelter recommendations to facilities with wheelchair access</div>
+        </div>
+
+        <!-- Medical Requirements -->
+        <div class="col-md-6">
+          <label for="medical_requirements" class="form-label fw-semibold text-dark">
+            <i class="bi bi-heart-pulse text-danger me-1"></i>Medical Support Requirements
+          </label>
+          <textarea class="form-control" id="medical_requirements" name="medical_requirements" rows="2"
+                    placeholder="Specify medications, oxygen, insulin cooling, dialysis, trauma dressings…">{{ form_data.get('medical_requirements', '') }}</textarea>
+          <div class="form-text">Will prioritize shelters with active medical teams &amp; first-aid bays</div>
+        </div>
+
+        <!-- Other Special Requirements -->
+        <div class="col-md-6">
+          <label for="other_special_requirements" class="form-label fw-semibold text-dark">
+            <i class="bi bi-star text-warning me-1"></i>Other Special Requirements
+          </label>
+          <textarea class="form-control" id="other_special_requirements" name="other_special_requirements" rows="2"
+                    placeholder="Dietary requirements, infant baby food, service animals, pregnant women…">{{ form_data.get('other_special_requirements', '') }}</textarea>
+          <div class="form-text">Any specific logistical or cultural considerations</div>
+        </div>
+
+        <!-- Operational Dispatch Notes -->
+        <div class="col-md-6">
+          <label for="notes" class="form-label fw-semibold text-dark">
+            <i class="bi bi-chat-left-text text-secondary me-1"></i>Field Notes &amp; Dispatch Instructions
+          </label>
+          <textarea class="form-control" id="notes" name="notes" rows="2"
+                    placeholder="Evacuation transit vehicle info, expected ETA, urgent contacts…">{{ form_data.get('notes', '') }}</textarea>
+          <div class="form-text">Additional information for shelter managers and coordinating authorities</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ── Submit & Action Buttons ─────────────────────────────────────────────── -->
+  <div class="d-flex align-items-center justify-content-between p-3 bg-white rounded border">
+    <a href="{{ url_for('requests.list_requests') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back to Requests
+    </a>
+    <div class="d-flex gap-2">
+      <button type="reset" class="btn btn-light border">
+        Reset Form
+      </button>
+      <button type="submit" class="btn btn-primary btn-lg px-4 fw-semibold" id="btn-submit-request">
+        <i class="bi bi-send-check me-1"></i>Submit Emergency Request
+      </button>
+    </div>
+  </div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  (function () {
+    // 1. Quick size preset buttons
+    document.querySelectorAll('.size-preset').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.getElementById('group_size').value = this.getAttribute('data-size');
+      });
+    });
+
+    // 2. Coordinate presets
+    document.querySelectorAll('.coord-preset').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.getElementById('latitude').value = this.getAttribute('data-lat');
+        document.getElementById('longitude').value = this.getAttribute('data-lng');
+        const locName = document.getElementById('location_name');
+        if (!locName.value.trim()) {
+          locName.value = this.getAttribute('data-loc');
+        }
+      });
+    });
+
+    // 3. Device Geolocation detection
+    const gpsBtn = document.getElementById('btn-detect-gps');
+    if (gpsBtn && navigator.geolocation) {
+      gpsBtn.addEventListener('click', function () {
+        gpsBtn.disabled = true;
+        gpsBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Locating…';
+        navigator.geolocation.getCurrentPosition(
+          function (pos) {
+            document.getElementById('latitude').value = pos.coords.latitude.toFixed(6);
+            document.getElementById('longitude').value = pos.coords.longitude.toFixed(6);
+            gpsBtn.disabled = false;
+            gpsBtn.className = 'btn btn-sm btn-success';
+            gpsBtn.innerHTML = '<i class="bi bi-check-circle me-1"></i>Coordinates Detected';
+          },
+          function (err) {
+            gpsBtn.disabled = false;
+            gpsBtn.className = 'btn btn-sm btn-outline-danger';
+            gpsBtn.innerHTML = '<i class="bi bi-exclamation-circle me-1"></i>Location Access Denied';
+          },
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+      });
+    }
+
+    // 4. Client-side validation: group size > 0, non-negative people counts
+    const form = document.getElementById('emergency-request-form');
+    const errBox = document.getElementById('client-errors-box');
+
+    if (form) {
+      form.addEventListener('submit', function (e) {
+        const errors = [];
+        const groupSize = parseInt(document.getElementById('group_size').value, 10);
+        const lat = parseFloat(document.getElementById('latitude').value);
+        const lng = parseFloat(document.getElementById('longitude').value);
+        const injured = parseInt(document.getElementById('injured_count').value || '0', 10);
+        const elderly = parseInt(document.getElementById('elderly_count').value || '0', 10);
+        const children = parseInt(document.getElementById('children_count').value || '0', 10);
+
+        if (isNaN(groupSize) || groupSize <= 0) {
+          errors.push('Group size must be a positive number greater than zero.');
+          document.getElementById('group_size').classList.add('is-invalid');
+        } else {
+          document.getElementById('group_size').classList.remove('is-invalid');
+        }
+
+        if (isNaN(lat) || lat < -90 || lat > 90) {
+          errors.push('Please enter a valid latitude between -90.0 and +90.0.');
+          document.getElementById('latitude').classList.add('is-invalid');
+        } else {
+          document.getElementById('latitude').classList.remove('is-invalid');
+        }
+
+        if (isNaN(lng) || lng < -180 || lng > 180) {
+          errors.push('Please enter a valid longitude between -180.0 and +180.0.');
+          document.getElementById('longitude').classList.add('is-invalid');
+        } else {
+          document.getElementById('longitude').classList.remove('is-invalid');
+        }
+
+        if (injured < 0) {
+          errors.push('Injured people count cannot be negative.');
+          document.getElementById('injured_count').classList.add('is-invalid');
+        }
+        if (elderly < 0) {
+          errors.push('Elderly people count cannot be negative.');
+          document.getElementById('elderly_count').classList.add('is-invalid');
+        }
+        if (children < 0) {
+          errors.push('Children count cannot be negative.');
+          document.getElementById('children_count').classList.add('is-invalid');
+        }
+
+        if (errors.length > 0) {
+          e.preventDefault();
+          errBox.innerHTML = '<div class="fw-bold mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Please fix the following issues:</div><ul class="mb-0 ps-3">' +
+            errors.map(function (m) { return '<li>' + m + '</li>'; }).join('') + '</ul>';
+          errBox.classList.remove('d-none');
+          errBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      });
+    }
+    // 5. Submit loading state
+    const reqForm = document.getElementById('emergency-request-form');
+    if (reqForm) {
+      reqForm.addEventListener('submit', function () {
+        const submitBtn = document.getElementById('btn-submit-request');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Submitting Request…';
+        }
+      });
+    }
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}Group Requests — Shelter Network{% endblock %}
+
+{% block content %}
+
+<!-- ── Page Header ──────────────────────────────────────────────────────────── -->
+<div class="page-header d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+  <div>
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+        <i class="bi bi-people me-1"></i>Field Operations
+      </span>
+      <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">
+        Intake &amp; Allocation Pipeline
+      </span>
+    </div>
+    <h1 class="page-title mb-1">Group Shelter Requests</h1>
+    <p class="page-subtitle text-muted mb-0">
+      Track incoming displaced populations, vulnerable group requirements, and placement statuses.
+    </p>
+  </div>
+  <div>
+    <a href="{{ url_for('requests.new_request') }}" class="btn btn-primary btn-sm" id="btn-new-request">
+      <i class="bi bi-plus-lg me-1"></i>New Request
+    </a>
+  </div>
+</div>
+
+<!-- ── Summary Statistics Strip ─────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-list-task me-1 text-muted"></i>Total Requests</span>
+      <div class="stat-card-val text-dark">{{ stats.total }}</div>
+      <div class="stat-card-hint text-muted">All intake records</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-hourglass-split me-1 text-warning"></i>Pending</span>
+      <div class="stat-card-val text-warning">{{ stats.pending }}</div>
+      <div class="stat-card-hint text-muted">Awaiting allocation</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-check2-circle me-1 text-success"></i>Allocated</span>
+      <div class="stat-card-val text-success">{{ stats.allocated }}</div>
+      <div class="stat-card-hint text-muted">Placed in shelters</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-people me-1 text-primary"></i>Total People</span>
+      <div class="stat-card-val text-primary">{{ '{:,}'.format(stats.total_people) }}</div>
+      <div class="stat-card-hint text-muted">Registered displaced</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-person-exclamation me-1 text-danger"></i>Pending People</span>
+      <div class="stat-card-val text-danger">{{ '{:,}'.format(stats.pending_people) }}</div>
+      <div class="stat-card-hint text-muted">Need shelter now</div>
+    </div>
+  </div>
+
+  <div class="col-6 col-lg-2 col-md-4">
+    <div class="stat-card h-100">
+      <span class="stat-card-label"><i class="bi bi-heart-pulse me-1 text-info"></i>Special Needs</span>
+      <div class="stat-card-val text-info">{{ stats.special_needs_reqs }}</div>
+      <div class="stat-card-hint text-muted">Medical / accessible</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Search & Filter Bar ──────────────────────────────────────────────────── -->
+<form method="GET" action="{{ url_for('requests.list_requests') }}" class="shelter-filter-bar mb-3" id="requests-filter-form">
+  <div class="input-group input-group-sm" style="max-width: 360px;">
+    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+    <input type="search" class="form-control" name="q" id="request-search"
+           placeholder="Search by location, team, or notes…" value="{{ search }}" autocomplete="off"/>
+  </div>
+
+  <select name="status" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+    <option value="">All Statuses</option>
+    {% for s in STATUS_CHOICES %}
+    <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>
+      {{ STATUS_LABELS.get(s, s|capitalize) }}
+    </option>
+    {% endfor %}
+  </select>
+
+  <button type="submit" class="btn btn-sm btn-outline-secondary">Filter</button>
+  {% if search or status_filter %}
+  <a href="{{ url_for('requests.list_requests') }}" class="btn btn-sm btn-link text-muted">
+    <i class="bi bi-x-circle me-1"></i>Clear
+  </a>
+  {% endif %}
+</form>
+
+<!-- ── Requests Table ───────────────────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-body p-0">
+    {% if requests %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" id="requests-table">
+        <thead class="table-light text-muted small text-uppercase">
+          <tr>
+            <th class="ps-4">Req #</th>
+            <th style="min-width: 180px;">Requesting Unit / Team</th>
+            <th style="min-width: 200px;">Location</th>
+            <th class="text-center">Group Size</th>
+            <th>Demographics</th>
+            <th>Special Needs</th>
+            <th class="text-center">Status</th>
+            <th>Submitted</th>
+            <th class="text-end pe-4">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in requests %}
+          <tr>
+            <td class="ps-4 text-nowrap">
+              <span class="fw-bold text-dark">#{{ r.id }}</span>
+            </td>
+
+            <td>
+              <div class="fw-semibold text-dark">
+                {{ r.requesting_team or (r.submitter.full_name if r.submitter else 'Unknown') }}
+              </div>
+              <div class="text-muted small">
+                <i class="bi bi-person me-1"></i>{{ r.submitter.full_name if r.submitter else 'Unknown' }}
+                {% if r.contact_phone %}
+                  &bull; <i class="bi bi-telephone ms-1 me-1"></i>{{ r.contact_phone }}
+                {% endif %}
+              </div>
+            </td>
+
+            <td>
+              <div class="fw-medium text-dark text-truncate" style="max-width: 220px;" title="{{ r.location_name }}">
+                <i class="bi bi-geo-alt-fill text-danger me-1"></i>{{ r.location_name }}
+              </div>
+              <div class="text-muted small">
+                {{ '%.4f'|format(r.latitude) }}, {{ '%.4f'|format(r.longitude) }}
+              </div>
+            </td>
+
+            <td class="text-center text-nowrap">
+              <span class="badge bg-primary fs-6 px-3 py-1">{{ r.group_size }}</span>
+            </td>
+
+            <td class="small text-nowrap">
+              {% if r.injured_count > 0 %}
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1" title="Injured">
+                  <i class="bi bi-bandaid"></i> {{ r.injured_count }}
+                </span>
+              {% endif %}
+              {% if r.elderly_count > 0 %}
+                <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle me-1" title="Elderly">
+                  <i class="bi bi-person-walking"></i> {{ r.elderly_count }}
+                </span>
+              {% endif %}
+              {% if r.children_count > 0 %}
+                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle me-1" title="Children">
+                  <i class="bi bi-person"></i> {{ r.children_count }}
+                </span>
+              {% endif %}
+              {% if r.injured_count == 0 and r.elderly_count == 0 and r.children_count == 0 %}
+                <span class="text-muted small">General</span>
+              {% endif %}
+            </td>
+
+            <td>
+              <div class="d-flex flex-wrap gap-1" style="max-width: 200px;">
+                {% if r.accessibility_requirements or r.has_disabled %}
+                  <span class="badge bg-light text-primary border" title="{{ r.accessibility_requirements or 'Accessibility required' }}">
+                    <i class="bi bi-wheelchair"></i> Access
+                  </span>
+                {% endif %}
+                {% if r.medical_requirements or r.has_injured %}
+                  <span class="badge bg-light text-danger border" title="{{ r.medical_requirements or 'Medical required' }}">
+                    <i class="bi bi-heart-pulse"></i> Medical
+                  </span>
+                {% endif %}
+                {% if r.other_special_requirements %}
+                  <span class="badge bg-light text-dark border" title="{{ r.other_special_requirements }}">
+                    <i class="bi bi-star"></i> Special
+                  </span>
+                {% endif %}
+                {% if not r.has_special_needs %}
+                  <span class="text-muted small">None</span>
+                {% endif %}
+              </div>
+            </td>
+
+            <td class="text-center text-nowrap">
+              <span class="badge {{ r.status_badge_class }}">
+                {{ r.status_label }}
+              </span>
+            </td>
+
+            <td class="text-nowrap small text-muted">
+              {{ r.formatted_date_short }}
+            </td>
+
+            <td class="text-end pe-4 text-nowrap">
+              <a href="{{ url_for('requests.request_detail', request_id=r.id) }}"
+                 class="btn btn-sm btn-outline-primary py-1 px-2" title="View full request details">
+                <i class="bi bi-eye me-1"></i>View
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state p-5">
+      <i class="bi bi-inbox empty-state-icon"></i>
+      <div class="empty-state-title">No shelter requests found</div>
+      <p class="empty-state-desc">
+        {% if search or status_filter %}
+          No requests match your current search or status filter. Try clearing filters.
+        {% else %}
+          No group shelter requests have been registered yet. Click below to submit an intake request.
+        {% endif %}
+      </p>
+      {% if search or status_filter %}
+        <a href="{{ url_for('requests.list_requests') }}" class="btn btn-sm btn-outline-secondary">Clear Filters</a>
+      {% else %}
+        <a href="{{ url_for('requests.new_request') }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-plus-lg me-1"></i>New Request
+        </a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
